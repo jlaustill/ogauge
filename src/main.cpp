@@ -4,12 +4,22 @@
  */
 
 #include <Arduino.h>
+#include "display_st7701.h"
 
 void setup(void) {
     Serial.begin(115200);
+    Serial.println("OGauge: Display bring-up");
+    Serial.println("I2C init...");
+    I2C_init();
+    Serial.println("TCA9554 init...");
+    TCA9554_init(0x00);
+    Serial.println("Display init...");
+    Display_init();
+    Serial.println("Filling screen blue...");
+    Display_fill_color(0x001F);
+    Serial.println("Done!");
 }
 
 void loop(void) {
-    Serial.println("Hello, World!");
-    delay(200);
+    delay(1000);
 }

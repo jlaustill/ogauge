@@ -1,4 +1,16 @@
 {
   "cppRequired": true,
-  "noCache": true
+  "noCache": true,
+  "include": [
+    "/home/linux/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/driver/include",
+    "/home/linux/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_lcd/include",
+    "/home/linux/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_common/include",
+    "/home/linux/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/hal/include",
+    "/home/linux/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/hal/esp32s3/include",
+    "/home/linux/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/soc/esp32s3/include",
+    "/home/linux/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/soc/include",
+    "/home/linux/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_hw_support/include",
+    "/home/linux/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include",
+    "/home/linux/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/freertos/include/freertos"
+  ]
 }

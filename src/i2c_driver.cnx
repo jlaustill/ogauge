@@ -1,0 +1,34 @@
+#include <Wire.h>
+
+scope I2C {
+  const i32 SDA_PIN <- 15;
+  const i32 SCL_PIN <- 7;
+
+  public void init() {
+    Wire.begin(this.SDA_PIN, this.SCL_PIN);
+  }
+
+  public u8 read_byte(u8 addr, u8 reg) {
+    Wire.beginTransmission(addr);
+    Wire.write(reg);
+    u8 err <- Wire.endTransmission(true);
+    if (err) {
+      global.printf("I2C read failed\r\n");
+      return 0;
+    }
+    Wire.requestFrom(addr, 1);
+    return Wire.read();
+  }
+
+  public bool write_byte(u8 addr, u8 reg, u8 data) {
+    Wire.beginTransmission(addr);
+    Wire.write(reg);
+    Wire.write(data);
+    u8 err <- Wire.endTransmission(true);
+    if (err) {
+      global.printf("I2C write failed\r\n");
+      return false;
+    }
+    return true;
+  }
+}

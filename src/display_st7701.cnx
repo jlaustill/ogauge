@@ -1,0 +1,278 @@
+#include "tca9554.cnx"
+#include <Arduino.h>
+#include <driver/spi_master.h>
+#include <esp_lcd_panel_ops.h>
+#include <esp_lcd_panel_rgb.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+
+scope Display {
+  const u8 EXIO_LCD_RST <- 1;
+  const u8 EXIO_SPI_CS <- 3;
+  const i32 SPI_CLK_PIN <- 2;
+  const i32 SPI_MOSI_PIN <- 1;
+  const i32 BACKLIGHT_PIN <- 6;
+  const i32 LCD_WIDTH <- 480;
+  const i32 LCD_HEIGHT <- 480;
+
+  spi_device_handle_t spi_handle;
+  esp_lcd_panel_handle_t panel_handle;
+
+  void spi_cmd(u8 cmd) {
+    spi_transaction_t txn <- {
+      cmd: 0,
+      addr: cmd,
+      length: 0,
+      rxlength: 0
+    };
+    global.spi_device_transmit(this.spi_handle, txn);
+  }
+
+  void spi_data(u8 data) {
+    spi_transaction_t txn <- {
+      cmd: 1,
+      addr: data,
+      length: 0,
+      rxlength: 0
+    };
+    global.spi_device_transmit(this.spi_handle, txn);
+  }
+
+  void cs_enable() {
+    global.TCA9554.set_pin(this.EXIO_SPI_CS, false);
+    global.vTaskDelay(global.pdMS_TO_TICKS(10));
+  }
+
+  void cs_disable() {
+    global.TCA9554.set_pin(this.EXIO_SPI_CS, true);
+    global.vTaskDelay(global.pdMS_TO_TICKS(10));
+  }
+
+  void reset() {
+    global.TCA9554.set_pin(this.EXIO_LCD_RST, false);
+    global.vTaskDelay(global.pdMS_TO_TICKS(10));
+    global.TCA9554.set_pin(this.EXIO_LCD_RST, true);
+    global.vTaskDelay(global.pdMS_TO_TICKS(50));
+  }
+
+  void spi_init() {
+    spi_bus_config_t buscfg <- {
+      mosi_io_num: this.SPI_MOSI_PIN,
+      miso_io_num: -1,
+      sclk_io_num: this.SPI_CLK_PIN,
+      quadwp_io_num: -1,
+      quadhd_io_num: -1,
+      max_transfer_sz: 64
+    };
+    global.spi_bus_initialize(SPI2_HOST, buscfg, SPI_DMA_CH_AUTO);
+
+    spi_device_interface_config_t devcfg <- {
+      command_bits: 1,
+      address_bits: 8,
+      mode: 0,
+      clock_speed_hz: 40000000,
+      spics_io_num: -1,
+      queue_size: 1
+    };
+    global.spi_bus_add_device(SPI2_HOST, devcfg, this.spi_handle);
+  }
+
+  void st7701_init() {
+    this.cs_enable();
+
+    // Page 1: Display settings
+    this.spi_cmd(0xFF);
+    this.spi_data(0x77); this.spi_data(0x01); this.spi_data(0x00);
+    this.spi_data(0x00); this.spi_data(0x10);
+
+    this.spi_cmd(0xC0);
+    this.spi_data(0x3B); this.spi_data(0x00);
+
+    this.spi_cmd(0xC1);
+    this.spi_data(0x0B); this.spi_data(0x02);
+
+    this.spi_cmd(0xC2);
+    this.spi_data(0x07); this.spi_data(0x02);
+
+    this.spi_cmd(0xCC);
+    this.spi_data(0x10);
+
+    this.spi_cmd(0xCD);
+    this.spi_data(0x08);
+
+    // Positive gamma
+    this.spi_cmd(0xB0);
+    this.spi_data(0x00); this.spi_data(0x11); this.spi_data(0x16);
+    this.spi_data(0x0e); this.spi_data(0x11); this.spi_data(0x06);
+    this.spi_data(0x05); this.spi_data(0x09); this.spi_data(0x08);
+    this.spi_data(0x21); this.spi_data(0x06); this.spi_data(0x13);
+    this.spi_data(0x10); this.spi_data(0x29); this.spi_data(0x31);
+    this.spi_data(0x18);
+
+    // Negative gamma
+    this.spi_cmd(0xB1);
+    this.spi_data(0x00); this.spi_data(0x11); this.spi_data(0x16);
+    this.spi_data(0x0e); this.spi_data(0x11); this.spi_data(0x07);
+    this.spi_data(0x05); this.spi_data(0x09); this.spi_data(0x09);
+    this.spi_data(0x21); this.spi_data(0x05); this.spi_data(0x13);
+    this.spi_data(0x11); this.spi_data(0x2a); this.spi_data(0x31);
+    this.spi_data(0x18);
+
+    // Page 2: Power settings
+    this.spi_cmd(0xFF);
+    this.spi_data(0x77); this.spi_data(0x01); this.spi_data(0x00);
+    this.spi_data(0x00); this.spi_data(0x11);
+
+    this.spi_cmd(0xB0); this.spi_data(0x6d);
+    this.spi_cmd(0xB1); this.spi_data(0x37);
+    this.spi_cmd(0xB2); this.spi_data(0x81);
+    this.spi_cmd(0xB3); this.spi_data(0x80);
+    this.spi_cmd(0xB5); this.spi_data(0x43);
+    this.spi_cmd(0xB7); this.spi_data(0x85);
+    this.spi_cmd(0xB8); this.spi_data(0x20);
+    this.spi_cmd(0xC1); this.spi_data(0x78);
+    this.spi_cmd(0xC2); this.spi_data(0x78);
+    this.spi_cmd(0xD0); this.spi_data(0x88);
+
+    // Page 2: Timing settings
+    this.spi_cmd(0xE0);
+    this.spi_data(0x00); this.spi_data(0x00); this.spi_data(0x02);
+
+    this.spi_cmd(0xE1);
+    this.spi_data(0x03); this.spi_data(0xA0); this.spi_data(0x00);
+    this.spi_data(0x00); this.spi_data(0x04); this.spi_data(0xA0);
+    this.spi_data(0x00); this.spi_data(0x00); this.spi_data(0x00);
+    this.spi_data(0x20); this.spi_data(0x20);
+
+    this.spi_cmd(0xE2);
+    this.spi_data(0x00); this.spi_data(0x00); this.spi_data(0x00);
+    this.spi_data(0x00); this.spi_data(0x00); this.spi_data(0x00);
+    this.spi_data(0x00); this.spi_data(0x00); this.spi_data(0x00);
+    this.spi_data(0x00); this.spi_data(0x00); this.spi_data(0x00);
+    this.spi_data(0x00);
+
+    this.spi_cmd(0xE3);
+    this.spi_data(0x00); this.spi_data(0x00);
+    this.spi_data(0x11); this.spi_data(0x00);
+
+    this.spi_cmd(0xE4);
+    this.spi_data(0x22); this.spi_data(0x00);
+
+    this.spi_cmd(0xE5);
+    this.spi_data(0x05); this.spi_data(0xEC); this.spi_data(0xA0); this.spi_data(0xA0);
+    this.spi_data(0x07); this.spi_data(0xEE); this.spi_data(0xA0); this.spi_data(0xA0);
+    this.spi_data(0x00); this.spi_data(0x00); this.spi_data(0x00); this.spi_data(0x00);
+    this.spi_data(0x00); this.spi_data(0x00); this.spi_data(0x00); this.spi_data(0x00);
+
+    this.spi_cmd(0xE6);
+    this.spi_data(0x00); this.spi_data(0x00);
+    this.spi_data(0x11); this.spi_data(0x00);
+
+    this.spi_cmd(0xE7);
+    this.spi_data(0x22); this.spi_data(0x00);
+
+    this.spi_cmd(0xE8);
+    this.spi_data(0x06); this.spi_data(0xED); this.spi_data(0xA0); this.spi_data(0xA0);
+    this.spi_data(0x08); this.spi_data(0xEF); this.spi_data(0xA0); this.spi_data(0xA0);
+    this.spi_data(0x00); this.spi_data(0x00); this.spi_data(0x00); this.spi_data(0x00);
+    this.spi_data(0x00); this.spi_data(0x00); this.spi_data(0x00); this.spi_data(0x00);
+
+    this.spi_cmd(0xEB);
+    this.spi_data(0x00); this.spi_data(0x00); this.spi_data(0x40);
+    this.spi_data(0x40); this.spi_data(0x00); this.spi_data(0x00);
+    this.spi_data(0x00);
+
+    this.spi_cmd(0xED);
+    this.spi_data(0xFF); this.spi_data(0xFF); this.spi_data(0xFF);
+    this.spi_data(0xBA); this.spi_data(0x0A); this.spi_data(0xBF);
+    this.spi_data(0x45); this.spi_data(0xFF); this.spi_data(0xFF);
+    this.spi_data(0x54); this.spi_data(0xFB); this.spi_data(0xA0);
+    this.spi_data(0xAB); this.spi_data(0xFF); this.spi_data(0xFF);
+    this.spi_data(0xFF);
+
+    this.spi_cmd(0xEF);
+    this.spi_data(0x10); this.spi_data(0x0D); this.spi_data(0x04);
+    this.spi_data(0x08); this.spi_data(0x3F); this.spi_data(0x1F);
+
+    // Page 3
+    this.spi_cmd(0xFF);
+    this.spi_data(0x77); this.spi_data(0x01); this.spi_data(0x00);
+    this.spi_data(0x00); this.spi_data(0x13);
+
+    this.spi_cmd(0xEF); this.spi_data(0x08);
+
+    // Exit page mode
+    this.spi_cmd(0xFF);
+    this.spi_data(0x77); this.spi_data(0x01); this.spi_data(0x00);
+    this.spi_data(0x00); this.spi_data(0x00);
+
+    this.spi_cmd(0x36); this.spi_data(0x00);
+    this.spi_cmd(0x3A); this.spi_data(0x66);
+
+    this.spi_cmd(0x11);
+    global.vTaskDelay(global.pdMS_TO_TICKS(480));
+
+    this.spi_cmd(0x20);
+    global.vTaskDelay(global.pdMS_TO_TICKS(120));
+
+    this.spi_cmd(0x29);
+    this.cs_disable();
+  }
+
+  void rgb_panel_init() {
+    esp_lcd_rgb_panel_config_t rgb_config <- {
+      clk_src: LCD_CLK_SRC_PLL160M,
+      timings: {
+        pclk_hz: 16000000,
+        h_res: this.LCD_WIDTH,
+        v_res: this.LCD_HEIGHT,
+        hsync_pulse_width: 8,
+        hsync_back_porch: 10,
+        hsync_front_porch: 50,
+        vsync_pulse_width: 3,
+        vsync_back_porch: 8,
+        vsync_front_porch: 8
+      },
+      data_width: 16,
+      psram_trans_align: 64,
+      hsync_gpio_num: 38,
+      vsync_gpio_num: 39,
+      de_gpio_num: 40,
+      pclk_gpio_num: 41,
+      data_gpio_nums: [5, 45, 48, 47, 21, 14, 13, 12, 11, 10, 9, 46, 3, 8, 18, 17],
+      disp_gpio_num: -1
+    };
+    rgb_config.flags.fb_in_psram <- true;
+    global.esp_lcd_new_rgb_panel(rgb_config, this.panel_handle);
+    global.esp_lcd_panel_reset(this.panel_handle);
+    global.esp_lcd_panel_init(this.panel_handle);
+  }
+
+  void backlight_init() {
+    global.ledcSetup(0, 20000, 10);
+    global.ledcAttachPin(this.BACKLIGHT_PIN, 0);
+    global.ledcWrite(0, 500);
+  }
+
+  public void init() {
+    this.reset();
+    this.spi_init();
+    this.st7701_init();
+    this.rgb_panel_init();
+    this.backlight_init();
+  }
+
+  public void fill_color(u16 color) {
+    u16[480] buf;
+    u32 i <- 0;
+    while (i < 480) {
+      buf[i] <- color;
+      i <- i + 1;
+    }
+    i <- 0;
+    while (i < this.LCD_HEIGHT) {
+      global.esp_lcd_panel_draw_bitmap(this.panel_handle, 0, i, this.LCD_WIDTH, i + 1, buf);
+      i <- i + 1;
+    }
+  }
+}
