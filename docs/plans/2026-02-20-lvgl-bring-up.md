@@ -6,11 +6,11 @@
 
 **Architecture:** LVGL renders into partial PSRAM buffers (480x48 lines, double-buffered). A flush callback copies dirty regions to the RGB panel via `esp_lcd_panel_draw_bitmap()`. Touch input is polled via our existing CST820 driver and fed to LVGL's input device system. All driven from Arduino `loop()`.
 
-**Tech Stack:** LVGL v9.2, ESP32-S3, PlatformIO + Arduino framework, C-Next (for main/display/touch), C++ (for LVGL port layer)
+**Tech Stack:** LVGL v9.2, ESP32-S3, PlatformIO + Arduino framework, C-Next throughout
 
 **Design adjustment:** The original design called for direct framebuffer mode, but `esp_lcd_rgb_panel_get_frame_buffer()` doesn't exist in this ESP-IDF version (4.4/Arduino ESP32 v2). Partial buffers + flush callback achieve the same result and reuse the proven `esp_lcd_panel_draw_bitmap()` path.
 
-**C-Next limitation:** LVGL callbacks require pointer parameters (`lv_display_t*`, `lv_area_t*`, etc.) which C-Next cannot express. The LVGL port layer is therefore written in plain C++ (`lvgl_port.cpp`), while `main.cnx` calls into it via `extern "C"` functions.
+**C-Next note:** C-Next passes all parameters by reference automatically (ADR-006). A scope function `void flush(lv_display_t disp, const lv_area_t area, u8 px_map)` transpiles to `void flush(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map)` — exactly matching LVGL's expected callback signatures. Callbacks use the Function-as-Type Pattern (ADR-029). Nullable C pointers from `heap_caps_malloc` use the `c_` prefix (ADR-046).
 
 ---
 
@@ -124,156 +124,121 @@ git commit -m "Add minimal LVGL v9 config for 480x480 RGB565"
 
 ---
 
-### Task 3: Create LVGL port layer (C++)
+### Task 3: Create LVGL port layer (C-Next)
 
-This is the core integration file. It handles LVGL display driver, touch input, and provides a simple API for C-Next to call.
+This is the core integration file. It handles LVGL display driver, touch input driver, and provides a simple API for main.cnx to call. Written in C-Next — the transpiler auto-generates the pointer-based C signatures LVGL expects.
 
 **Files:**
-- Create: `src/lvgl_port.h`
-- Create: `src/lvgl_port.cpp`
+- Create: `src/lvgl_port.cnx`
 
-**Step 1: Create the header**
+**Step 1: Create the LVGL port scope**
 
-```c
-#ifndef LVGL_PORT_H
-#define LVGL_PORT_H
-
-#include <esp_lcd_panel_ops.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/* Call after Display.init() to store the panel handle for LVGL's flush callback */
-void lvgl_port_set_panel(esp_lcd_panel_handle_t panel);
-
-/* Initialize LVGL: display driver, input driver. Call after lv_init(). */
-void lvgl_port_init(void);
-
-/* Call from loop(): feeds elapsed time to LVGL and runs the timer handler */
-void lvgl_port_loop(void);
-
-/* Create the demo UI (label + arc widget) */
-void lvgl_port_create_demo(void);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif /* LVGL_PORT_H */
-```
-
-**Step 2: Create the implementation**
-
-```cpp
-#include "lvgl_port.h"
-#include "touch_cst820.h"
+```cnx
+#include "tca9554.cnx"
+#include "touch_cst820.cnx"
 #include <lvgl.h>
 #include <Arduino.h>
 #include <esp_heap_caps.h>
+#include <esp_lcd_panel_ops.h>
 
-#define LCD_WIDTH  480
-#define LCD_HEIGHT 480
-#define LVGL_BUF_LINES 48  /* Render 48 lines at a time */
-#define LVGL_BUF_SIZE (LCD_WIDTH * LVGL_BUF_LINES * sizeof(uint16_t))
+scope LvglPort {
+  const i32 LCD_WIDTH <- 480;
+  const i32 LCD_HEIGHT <- 480;
+  const i32 BUF_LINES <- 48;
 
-static esp_lcd_panel_handle_t s_panel = NULL;
-static uint32_t s_last_tick = 0;
+  esp_lcd_panel_handle_t panel;
+  u32 last_tick;
 
-/* ---- Display flush callback ---- */
-static void disp_flush_cb(lv_display_t *disp, const lv_area_t *area, uint8_t *px_map) {
-    esp_lcd_panel_draw_bitmap(s_panel,
-        area->x1, area->y1,
-        area->x2 + 1, area->y2 + 1,
-        (void *)px_map);
-    lv_display_flush_ready(disp);
-}
+  void disp_flush(lv_display_t disp, const lv_area_t area, u8 px_map) {
+    global.esp_lcd_panel_draw_bitmap(this.panel,
+      area.x1, area.y1,
+      area.x2 + 1, area.y2 + 1,
+      px_map);
+    global.lv_display_flush_ready(disp);
+  }
 
-/* ---- Touch input read callback ---- */
-static void touch_read_cb(lv_indev_t *indev, lv_indev_data_t *data) {
-    bool touched = Touch_read();
+  void touch_read(lv_indev_t indev, lv_indev_data_t data) {
+    bool touched <- global.Touch.read();
     if (touched) {
-        data->point.x = Touch_get_x();
-        data->point.y = Touch_get_y();
-        data->state = LV_INDEV_STATE_PRESSED;
+      data.point.x <- global.Touch.get_x();
+      data.point.y <- global.Touch.get_y();
+      data.state <- LV_INDEV_STATE_PRESSED;
     } else {
-        data->state = LV_INDEV_STATE_RELEASED;
+      data.state <- LV_INDEV_STATE_RELEASED;
     }
-}
+  }
 
-/* ---- Public API ---- */
+  public void set_panel(esp_lcd_panel_handle_t p) {
+    this.panel <- p;
+  }
 
-void lvgl_port_set_panel(esp_lcd_panel_handle_t panel) {
-    s_panel = panel;
-}
+  public void init() {
+    u32 buf_size <- this.LCD_WIDTH * this.BUF_LINES * 2;
 
-void lvgl_port_init(void) {
-    /* Create display */
-    lv_display_t *disp = lv_display_create(LCD_WIDTH, LCD_HEIGHT);
+    lv_display_t c_disp <- global.lv_display_create(this.LCD_WIDTH, this.LCD_HEIGHT);
+    void c_buf1 <- global.heap_caps_malloc(buf_size, MALLOC_CAP_SPIRAM);
+    void c_buf2 <- global.heap_caps_malloc(buf_size, MALLOC_CAP_SPIRAM);
+    global.lv_display_set_buffers(c_disp, c_buf1, c_buf2, buf_size,
+                                  LV_DISPLAY_RENDER_MODE_PARTIAL);
+    global.lv_display_set_flush_cb(c_disp, this.disp_flush);
 
-    /* Allocate double partial buffers in PSRAM */
-    void *buf1 = heap_caps_malloc(LVGL_BUF_SIZE, MALLOC_CAP_SPIRAM);
-    void *buf2 = heap_caps_malloc(LVGL_BUF_SIZE, MALLOC_CAP_SPIRAM);
-    lv_display_set_buffers(disp, buf1, buf2, LVGL_BUF_SIZE,
-                           LV_DISPLAY_RENDER_MODE_PARTIAL);
-    lv_display_set_flush_cb(disp, disp_flush_cb);
+    lv_indev_t c_indev <- global.lv_indev_create();
+    global.lv_indev_set_type(c_indev, LV_INDEV_TYPE_POINTER);
+    global.lv_indev_set_read_cb(c_indev, this.touch_read);
 
-    /* Create touch input device */
-    lv_indev_t *indev = lv_indev_create();
-    lv_indev_set_type(indev, LV_INDEV_TYPE_POINTER);
-    lv_indev_set_read_cb(indev, touch_read_cb);
+    this.last_tick <- global.millis();
+  }
 
-    s_last_tick = millis();
-}
+  public void loop() {
+    u32 now <- global.millis();
+    u32 elapsed <- now - this.last_tick;
+    this.last_tick <- now;
+    global.lv_tick_inc(elapsed);
+    global.lv_timer_handler();
+  }
 
-void lvgl_port_loop(void) {
-    uint32_t now = millis();
-    uint32_t elapsed = now - s_last_tick;
-    s_last_tick = now;
-    lv_tick_inc(elapsed);
-    lv_timer_handler();
-}
+  public void create_demo() {
+    lv_obj_t c_scr <- global.lv_screen_active();
+    global.lv_obj_set_style_bg_color(c_scr, global.lv_color_hex(0x1a1a2e), 0);
 
-void lvgl_port_create_demo(void) {
-    lv_obj_t *scr = lv_screen_active();
-    lv_obj_set_style_bg_color(scr, lv_color_hex(0x1a1a2e), 0);
+    lv_obj_t c_label <- global.lv_label_create(c_scr);
+    global.lv_label_set_text(c_label, "OGauge");
+    global.lv_obj_set_style_text_color(c_label, global.lv_color_hex(0xeaf6f6), 0);
+    global.lv_obj_set_style_text_font(c_label, lv_font_montserrat_32, 0);
+    global.lv_obj_align(c_label, LV_ALIGN_CENTER, 0, -60);
 
-    /* Title label */
-    lv_obj_t *label = lv_label_create(scr);
-    lv_label_set_text(label, "OGauge");
-    lv_obj_set_style_text_color(label, lv_color_hex(0xeaf6f6), 0);
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_32, 0);
-    lv_obj_align(label, LV_ALIGN_CENTER, 0, -60);
+    lv_obj_t c_arc <- global.lv_arc_create(c_scr);
+    global.lv_obj_set_size(c_arc, 300, 300);
+    global.lv_arc_set_range(c_arc, 0, 100);
+    global.lv_arc_set_value(c_arc, 40);
+    global.lv_obj_set_style_arc_color(c_arc, global.lv_color_hex(0x0f3460), LV_PART_MAIN);
+    global.lv_obj_set_style_arc_color(c_arc, global.lv_color_hex(0x16c79a), LV_PART_INDICATOR);
+    global.lv_obj_set_style_arc_width(c_arc, 20, LV_PART_MAIN);
+    global.lv_obj_set_style_arc_width(c_arc, 20, LV_PART_INDICATOR);
+    global.lv_obj_align(c_arc, LV_ALIGN_CENTER, 0, 30);
 
-    /* Interactive arc */
-    lv_obj_t *arc = lv_arc_create(scr);
-    lv_obj_set_size(arc, 300, 300);
-    lv_arc_set_range(arc, 0, 100);
-    lv_arc_set_value(arc, 40);
-    lv_obj_set_style_arc_color(arc, lv_color_hex(0x0f3460), LV_PART_MAIN);
-    lv_obj_set_style_arc_color(arc, lv_color_hex(0x16c79a), LV_PART_INDICATOR);
-    lv_obj_set_style_arc_width(arc, 20, LV_PART_MAIN);
-    lv_obj_set_style_arc_width(arc, 20, LV_PART_INDICATOR);
-    lv_obj_align(arc, LV_ALIGN_CENTER, 0, 30);
-
-    /* Value label under the arc */
-    lv_obj_t *val_label = lv_label_create(scr);
-    lv_label_set_text(val_label, "40");
-    lv_obj_set_style_text_color(val_label, lv_color_hex(0x16c79a), 0);
-    lv_obj_set_style_text_font(val_label, &lv_font_montserrat_24, 0);
-    lv_obj_align(val_label, LV_ALIGN_CENTER, 0, 30);
+    lv_obj_t c_val <- global.lv_label_create(c_scr);
+    global.lv_label_set_text(c_val, "40");
+    global.lv_obj_set_style_text_color(c_val, global.lv_color_hex(0x16c79a), 0);
+    global.lv_obj_set_style_text_font(c_val, lv_font_montserrat_24, 0);
+    global.lv_obj_align(c_val, LV_ALIGN_CENTER, 0, 30);
+  }
 }
 ```
 
-**Step 3: Build to verify compilation**
+**Note on `c_` prefix:** Variables holding nullable C library return values use `c_` prefix per ADR-046 (e.g., `c_disp`, `c_buf1`). The `lv_display_create()`, `heap_caps_malloc()`, and `lv_indev_create()` functions can return NULL.
+
+**Note on callback registration:** `this.disp_flush` passes the scope function to `lv_display_set_flush_cb()`. C-Next transpiles `LvglPort_disp_flush` which has the correct pointer signature that LVGL expects.
+
+**Step 2: Build to verify compilation**
 
 Run: `pio run -e waveshare_lcd_21`
-Expected: Clean compile. The port functions aren't called yet but should link.
+Expected: Clean compile. Verify the transpiled `lvgl_port.cpp` has correct pointer signatures.
 
-**Step 4: Commit**
+**Step 3: Commit**
 
 ```bash
-git add src/lvgl_port.h src/lvgl_port.cpp
+git add src/lvgl_port.cnx src/lvgl_port.cpp src/lvgl_port.h
 git commit -m "Add LVGL port layer: display flush + touch input"
 ```
 
@@ -286,16 +251,11 @@ The LVGL flush callback needs the `esp_lcd_panel_handle_t` to call `esp_lcd_pane
 **Files:**
 - Modify: `src/display_st7701.cnx`
 
-**Step 1: Add lvgl_port.h include and set_panel call**
-
-After the `#include` block at the top, add:
-```
-#include "lvgl_port.h"
-```
+**Step 1: Add set_panel call in Display.init()**
 
 In `Display.init()`, after `this.rgb_panel_init()`, add:
-```
-global.lvgl_port_set_panel(this.panel_handle);
+```cnx
+global.LvglPort.set_panel(this.panel_handle);
 ```
 
 So `init()` becomes:
@@ -305,17 +265,22 @@ public void init() {
     this.spi_init();
     this.st7701_init();
     this.rgb_panel_init();
-    global.lvgl_port_set_panel(this.panel_handle);
+    global.LvglPort.set_panel(this.panel_handle);
     this.backlight_init();
 }
 ```
 
+Also add to the include block at the top:
+```cnx
+#include "lvgl_port.cnx"
+```
+
+**Note:** This creates an include dependency: display_st7701.cnx includes lvgl_port.cnx, which includes touch_cst820.cnx, which includes tca9554.cnx, which includes i2c_driver.cnx. This chain is fine — C-Next handles the include guard via transpiled `#ifndef` headers.
+
 **Step 2: Build to verify C-Next handles the panel handle pass-through**
 
 Run: `pio run -e waveshare_lcd_21`
-Expected: Clean build. C-Next transpiles the call to `lvgl_port_set_panel(Display_panel_handle)`.
-
-If C-Next rejects passing `esp_lcd_panel_handle_t` as a function argument, fallback: declare `extern esp_lcd_panel_handle_t Display_panel_handle;` in lvgl_port.cpp and remove the `static` keyword from the generated display_st7701.cpp by making panel_handle a public scope variable. (Try the clean approach first.)
+Expected: Clean build. C-Next transpiles the call to `LvglPort_set_panel(Display_panel_handle)`.
 
 **Step 3: Commit**
 
@@ -340,7 +305,6 @@ Replace the Phase 2 color-cycle demo with LVGL initialization and loop.
 #include <lvgl.h>
 #include "display_st7701.cnx"
 #include "touch_cst820.cnx"
-#include "lvgl_port.h"
 
 void setup() {
   Serial.begin(115200);
@@ -360,22 +324,24 @@ void setup() {
 
   Serial.println("LVGL init...");
   lv_init();
-  lvgl_port_init();
-  lvgl_port_create_demo();
+  LvglPort.init();
+  LvglPort.create_demo();
 
   Serial.println("Ready!");
 }
 
 void loop() {
-  lvgl_port_loop();
+  LvglPort.loop();
   delay(5);
 }
 ```
 
+**Note:** No separate `#include "lvgl_port.cnx"` needed — it's already included transitively via `display_st7701.cnx`.
+
 **Step 2: Build**
 
 Run: `pio run -e waveshare_lcd_21`
-Expected: Clean build. Everything links: C-Next scopes + LVGL port + LVGL library.
+Expected: Clean build. Everything links: C-Next scopes + LVGL library.
 
 **Step 3: Commit**
 
@@ -422,12 +388,16 @@ git commit -m "Phase 3: LVGL bring-up — label + arc demo verified on hardware"
 
 ## Troubleshooting
 
-**If LVGL shows nothing:** Check that `lvgl_port_set_panel()` was called before `lvgl_port_init()`. Add `Serial.println()` in the flush callback to verify it's being called.
+**If C-Next rejects LVGL types:** LVGL types like `lv_display_t`, `lv_area_t`, `lv_indev_data_t` are C structs. C-Next should handle them via the `#include <lvgl.h>` header. If the transpiler doesn't recognize a type, check whether the LVGL header is being found (verify `-DLV_CONF_INCLUDE_SIMPLE` is in build_flags).
 
-**If touch doesn't work in LVGL:** The touch read callback calls `Touch_read()` which returns bool. Verify coordinates are in 0-479 range. Add serial prints in the touch callback.
+**If callback registration fails:** The key line is `global.lv_display_set_flush_cb(c_disp, this.disp_flush)`. If C-Next can't pass a scope function as a callback argument, we may need to define the callback function at file scope (outside the scope block) or use ADR-029's Function-as-Type pattern explicitly.
+
+**If LVGL shows nothing:** Check that `LvglPort.set_panel()` was called before `LvglPort.init()`. Add `global.Serial.println()` in the flush callback to verify it's being called.
+
+**If touch doesn't work in LVGL:** The touch read callback calls `Touch.read()` which returns bool. Verify coordinates are in 0-479 range. Add serial prints in the touch callback.
 
 **If build fails on lv_conf.h:** Ensure `-DLV_CONF_INCLUDE_SIMPLE` is in build_flags. The `lv_conf.h` must be in `src/` (same directory as the other source files) for PlatformIO's include path to find it.
 
-**If C-Next rejects `lvgl_port_set_panel(this.panel_handle)`:** The panel handle type is an opaque pointer. Workaround: in `lvgl_port.cpp`, declare `extern esp_lcd_panel_handle_t Display_panel_handle;` and manually remove `static` from the transpiled `display_st7701.cpp` (then prevent the transpiler from overwriting it by moving the Display scope to pure C++). Simpler: just try it first — C-Next already uses this type as a scope variable.
+**If LVGL buffers cause memory issues:** Reduce `BUF_LINES` from 48 to 24 (halves buffer size from ~92KB to ~46KB total).
 
-**If LVGL buffers cause memory issues:** Reduce `LVGL_BUF_LINES` from 48 to 24 (halves buffer size from ~92KB to ~46KB total).
+**If `const lv_area_t area` doesn't compile in C-Next:** The `const` qualifier on a pass-by-reference parameter means the transpiler generates `const lv_area_t *area`. If C-Next doesn't support `const` on parameters, remove it — the flush callback will still work, just without the const qualifier in the generated C.
