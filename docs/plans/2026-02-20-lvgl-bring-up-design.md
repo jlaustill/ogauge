@@ -11,12 +11,29 @@ CST820 touch poll --> LVGL indev callback
                           |
                       LVGL core
                           |
-RGB panel framebuffer <-- LVGL display (DIRECT mode)
-     |
-DMA scans to ST7701S (continuously, no CPU involvement)
+                    partial buffers (PSRAM, double-buffered)
+                          |
+                    flush callback
+                          |
+                    Display.draw_bitmap()
+                          |
+                    esp_lcd_panel_draw_bitmap()
 ```
 
-LVGL draws directly into the RGB panel's PSRAM framebuffer. The ESP32-S3 LCD peripheral continuously DMA-scans this buffer to the display — no flush copy needed.
+LVGL renders into two 480x48-line PSRAM buffers (static arrays, ~45KB each). On flush, the dirty region is copied to the RGB panel via `esp_lcd_panel_draw_bitmap()`. The ESP32-S3 LCD peripheral continuously DMA-scans the panel's framebuffer to the display.
+
+**Why not direct framebuffer?** `esp_lcd_rgb_panel_get_frame_buffer()` doesn't exist in ESP-IDF 4.4 / Arduino ESP32 v2. Partial buffers + flush achieve the same result using the proven `esp_lcd_panel_draw_bitmap()` path.
+
+## 4-Layer Architecture
+
+```
+display_st7701.cnx  — owns ST7701S panel + exposes draw_bitmap()
+touch_cst820.cnx    — owns CST820 touch + exposes read()/get_x()/get_y()
+lvgl_port.cnx       — thin LVGL glue (display/indev setup, callbacks)
+main.cnx            — orchestrator (init sequence, loop, demo content)
+```
+
+Each layer owns its hardware. Don't duplicate access across layers.
 
 ## Components
 
@@ -25,47 +42,40 @@ LVGL draws directly into the RGB panel's PSRAM framebuffer. The ESP32-S3 LCD per
 Add `lvgl/lvgl@^9` to `platformio.ini` lib_deps. Create `lv_conf.h` with minimal config:
 - 480x480 resolution
 - RGB565 color depth (16-bit)
-- Direct render mode
+- Partial render mode (double-buffered)
 - No filesystem, no GPU, no logging
 
-### 2. Display Driver (`src/lvgl_display.cnx`)
+### 2. LVGL Port (`src/lvgl_port.cnx`)
 
-New scope `LvglDisplay`:
-- Get the RGB panel's framebuffer via `esp_lcd_rgb_panel_get_frame_buffer()`
-- Create LVGL display: `lv_display_create(480, 480)`
-- Set buffers: `lv_display_set_buffers(disp, fb, NULL, size, LV_DISPLAY_RENDER_MODE_DIRECT)`
-- Flush callback calls `lv_display_flush_ready()` only (buffer IS the display)
-- Display needs to expose panel handle from existing Display scope
+Scope `LvglPort` — thin glue layer:
+- Static double buffers: `u8[46080] buf1, buf2` (480 * 48 * 2 bytes each)
+- Flush callback: calls `Display.draw_bitmap()` then `lv_display_flush_ready()`
+- Touch callback: polls `Touch.read()` and fills `lv_indev_data_t`
+- `init()`: creates LVGL display + indev, sets buffers and callbacks
+- `loop()`: drives `lv_tick_inc()` + `lv_timer_handler()`
+- `create_demo()`: builds label + arc widget
 
-### 3. Touch Input (`src/lvgl_input.cnx`)
+### 3. Display Extension (`src/display_st7701.cnx`)
 
-New scope `LvglInput`:
-- Create indev: `lv_indev_create()` with type `LV_INDEV_TYPE_POINTER`
-- Read callback polls `Touch.read()` and fills `lv_indev_data_t` with x, y, state
+Add public `draw_bitmap()` to existing Display scope:
+- Wraps `esp_lcd_panel_draw_bitmap()` with the private panel handle
+- Keeps panel handle encapsulated — lvgl_port never touches it directly
 
 ### 4. Main Loop (updated `src/main.cnx`)
 
-- `setup()`: init hardware -> `lv_init()` -> init LVGL display -> init LVGL input -> create demo widgets
-- `loop()`: call `lv_tick_inc(elapsed_ms)` + `lv_timer_handler()` + ~5ms delay
-- Replace the Phase 2 color-cycle demo entirely
-
-### 5. Demo Content
-
-Simple screen proving touch + rendering work:
-- Dark background filling the round display
-- "OGauge" label centered
-- An arc widget (0-100 range) that responds to touch drag
+- `setup()`: init hardware -> `lv_init()` -> `LvglPort.init()` -> `LvglPort.create_demo()`
+- `loop()`: `LvglPort.loop()` + ~5ms delay
+- Replaces the Phase 2 color-cycle demo entirely
 
 ## Files Changed
 
 | File | Action |
 |------|--------|
-| `platformio.ini` | Add `lib_deps = lvgl/lvgl@^9` |
-| `src/lv_conf.h` | New — LVGL configuration |
-| `src/lvgl_display.cnx` | New — display driver binding |
-| `src/lvgl_input.cnx` | New — touch input binding |
-| `src/display_st7701s.cnx` | Expose panel handle + framebuffer getter |
-| `src/main.cnx` | Replace color-cycle with LVGL loop |
+| `platformio.ini` | Add `lib_deps = lvgl/lvgl@^9` — **DONE** |
+| `src/lv_conf.h` | New — LVGL configuration — **DONE** |
+| `src/lvgl_port.cnx` | New — display + touch glue — **BLOCKED on C-Next #883** |
+| `src/display_st7701.cnx` | Add public `draw_bitmap()` — **BLOCKED on C-Next #883** |
+| `src/main.cnx` | Replace color-cycle with LVGL loop — blocked on above |
 
 ## What Stays the Same
 
@@ -73,8 +83,21 @@ Simple screen proving touch + rendering work:
 - Backlight, reset sequences unchanged
 - Hardware init order unchanged (I2C -> TCA9554 -> Display -> Touch)
 
+## Blocker: C-Next Bug #883
+
+The transpiler generates incorrect C signatures for callback functions and opaque type usage:
+- Opaque types (`lv_display_t`, `lv_indev_t`) transpile as values instead of pointers
+- Primitive buffer params (`u8 px_map`) transpile as `uint8_t` instead of `uint8_t *`
+- Non-opaque structs (`lv_area_t`) correctly transpile as pointers (ADR-006 works)
+
+Minimal repro: `/tmp/cnext-bugs/883-callback-pointer-sig/`
+
+**No workarounds.** Phase 3 resumes when #883 is fixed.
+
 ## Decisions
 
-- **Direct framebuffer** over flush-copy: simpler, no extra RAM, no copy overhead
+- **Partial buffers** over direct framebuffer: ESP-IDF 4.4 lacks `get_frame_buffer()` API
+- **Static arrays** over `heap_caps_malloc`: ADR-003 forbids dynamic allocation
 - **Arduino loop()** over FreeRTOS task: sufficient for bring-up, defer threading to CAN phase
 - **Minimal demo** over widget development: prove the plumbing, build widgets later
+- **4-layer split** over monolithic: each layer owns its hardware, no duplication
