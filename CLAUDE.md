@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OGauge is an ESP32-S3 CAN-only digital gauge for vehicles with round touch displays. Currently in **design phase** - see `design.md` for full specification.
+OGauge is an ESP32-S3 CAN-only digital gauge for vehicles with round touch displays. See `design.md` for full specification.
 
 **Target Hardware:** Waveshare ESP32-S3 round touch display + custom CAN daughter board
 
@@ -65,15 +65,35 @@ J1939 Decoder    OBD-II ISO-TP
 - **Bitrates**: 125k, 250k, 500k
 - **Themes**: 2 (blue-ish, red-ish)
 
-## Build Commands (ESP-IDF)
+## Build Commands (PlatformIO + C-Next)
 
-When implementation begins:
 ```bash
-idf.py build              # Build firmware
-idf.py flash              # Flash to device
-idf.py monitor            # Serial monitor
-idf.py build flash monitor  # All-in-one
+pio run -e waveshare_lcd_21                              # Build
+pio run -e waveshare_lcd_21 -t upload && pio device monitor  # Flash + monitor
 ```
+
+C-Next `.cnx` files are auto-transpiled to `.cpp`/`.h` by `cnext_build.py` pre-build hook.
+
+## C-Next Philosophy
+
+**Zero workarounds.** All firmware is written in C-Next (`.cnx`). Never write C++ to dodge transpiler bugs — file a bug with minimal repro in `/tmp/cnext-bugs/<number>-<slug>/` and block until fixed. Making C-Next better is priority #1.
+
+## Firmware Layer Architecture
+
+```
+display_st7701.cnx  — owns ST7701S panel + exposes draw_bitmap()
+touch_cst820.cnx    — owns CST820 touch + exposes read()/get_x()/get_y()
+lvgl_port.cnx       — thin LVGL glue (display/indev setup, callbacks)
+main.cnx            — orchestrator (init sequence, loop, demo/app content)
+```
+
+Each layer owns its hardware. Don't duplicate access across layers.
+
+## C-Next Bug Reports
+
+Repro directory: `/tmp/cnext-bugs/<issue-number>-<slug>/`
+Required files: `fake_lib.h` (minimal C header), `test.cnx` (minimal trigger), `README.md` (expected vs actual output)
+Run: `cnext test.cnx` then compare generated `.c`/`.h` against expected output.
 
 ## Screen Sizes
 
