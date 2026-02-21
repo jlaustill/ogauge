@@ -5,10 +5,26 @@
 
 #include <Arduino.h>
 #include "display_st7701.h"
+#include "touch_cst820.h"
+
+#include <stdint.h>
+#include <stdbool.h>
+
+extern const uint16_t COLOR_BLUE = 0x001FU;
+
+extern const uint16_t COLOR_RED = 0xF800U;
+
+extern const uint16_t COLOR_WHITE = 0xFFFFU;
+
+extern const uint32_t NUM_COLORS = 3U;
+
+uint16_t colors[3] = {COLOR_BLUE, COLOR_RED, COLOR_WHITE};
+
+uint32_t color_index = 0U;
 
 void setup(void) {
     Serial.begin(115200);
-    Serial.println("OGauge: Display bring-up");
+    Serial.println("OGauge: Touch color cycle");
     Serial.println("I2C init...");
     I2C_init();
     Serial.println("TCA9554 init...");
@@ -16,10 +32,24 @@ void setup(void) {
     Serial.println("Display init...");
     Display_init();
     Serial.println("Filling screen blue...");
-    Display_fill_color(0x001F);
-    Serial.println("Done!");
+    Display_fill_color(COLOR_BLUE);
+    Serial.println("Touch init...");
+    Touch_init();
+    Serial.println("Ready! Touch to cycle colors.");
 }
 
 void loop(void) {
-    delay(1000);
+    bool touched = Touch_read();
+    if (touched) {
+        color_index = (color_index + 1U) % NUM_COLORS;
+        Display_fill_color(colors[color_index]);
+        Serial.print("Touch at (");
+        Serial.print(Touch_get_x());
+        Serial.print(", ");
+        Serial.print(Touch_get_y());
+        Serial.print(") -> color ");
+        Serial.println(color_index);
+        delay(300);
+    }
+    delay(10);
 }

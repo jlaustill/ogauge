@@ -1,9 +1,18 @@
 #include <Arduino.h>
 #include "display_st7701.cnx"
+#include "touch_cst820.cnx"
+
+const u16 COLOR_BLUE <- 0x001F;
+const u16 COLOR_RED <- 0xF800;
+const u16 COLOR_WHITE <- 0xFFFF;
+const u32 NUM_COLORS <- 3;
+
+u16[3] colors <- [COLOR_BLUE, COLOR_RED, COLOR_WHITE];
+u32 color_index <- 0;
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("OGauge: Display bring-up");
+  Serial.println("OGauge: Touch color cycle");
 
   Serial.println("I2C init...");
   I2C.init();
@@ -15,11 +24,26 @@ void setup() {
   Display.init();
 
   Serial.println("Filling screen blue...");
-  Display.fill_color(0x001F);
+  Display.fill_color(COLOR_BLUE);
 
-  Serial.println("Done!");
+  Serial.println("Touch init...");
+  Touch.init();
+
+  Serial.println("Ready! Touch to cycle colors.");
 }
 
 void loop() {
-  delay(1000);
+  bool touched <- Touch.read();
+  if (touched) {
+    color_index <- (color_index + 1) % NUM_COLORS;
+    Display.fill_color(colors[color_index]);
+    Serial.print("Touch at (");
+    Serial.print(Touch.get_x());
+    Serial.print(", ");
+    Serial.print(Touch.get_y());
+    Serial.print(") -> color ");
+    Serial.println(color_index);
+    delay(300);
+  }
+  delay(10);
 }

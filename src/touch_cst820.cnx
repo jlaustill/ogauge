@@ -1,0 +1,53 @@
+#include "tca9554.cnx"
+#include <Arduino.h>
+#include <Wire.h>
+
+scope Touch {
+  const u8 ADDRESS <- 0x15;
+  const u8 REG_TOUCH_DATA <- 0x01;
+  const u8 REG_DISABLE_SLEEP <- 0xFE;
+  const u8 EXIO_TOUCH_RST <- 2;
+
+  u8 points;
+  u16 x;
+  u16 y;
+
+  void reset() {
+    global.TCA9554.set_pin(this.EXIO_TOUCH_RST, false);
+    global.delay(10);
+    global.TCA9554.set_pin(this.EXIO_TOUCH_RST, true);
+    global.delay(50);
+  }
+
+  public void init() {
+    this.reset();
+    global.I2C.write_byte(this.ADDRESS, this.REG_DISABLE_SLEEP, 0xFF);
+    global.Serial.println("Touch: CST820 initialized");
+  }
+
+  public bool read() {
+    Wire.beginTransmission(this.ADDRESS);
+    Wire.write(this.REG_TOUCH_DATA);
+    Wire.endTransmission(false);
+    Wire.requestFrom(this.ADDRESS, 6);
+    u8 gesture <- Wire.read();
+    this.points <- Wire.read();
+    u8 x_hi <- Wire.read();
+    u8 x_lo <- Wire.read();
+    u8 y_hi <- Wire.read();
+    u8 y_lo <- Wire.read();
+    u16 x_high <- x_hi & 0x0F;
+    u16 y_high <- y_hi & 0x0F;
+    this.x <- (x_high << 8) | x_lo;
+    this.y <- (y_high << 8) | y_lo;
+    return (this.points > 0);
+  }
+
+  public u16 get_x() {
+    return this.x;
+  }
+
+  public u16 get_y() {
+    return this.y;
+  }
+}
