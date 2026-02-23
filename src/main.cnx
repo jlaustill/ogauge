@@ -3,10 +3,11 @@
 #include "display_st7701.cnx"
 #include "touch_cst820.cnx"
 #include "lvgl_port.cnx"
+#include "gauge_speed.cnx"
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("OGauge: LVGL bring-up");
+  Serial.println("OGauge: Needle gauge demo");
 
   Serial.println("I2C init...");
   I2C.init();
@@ -23,7 +24,9 @@ void setup() {
   Serial.println("LVGL init...");
   global.lv_init();
   LvglPort.init();
-  LvglPort.create_demo_label();
+
+  Serial.println("Gauge init...");
+  GaugeSpeed.create();
 
   Serial.println("Ready!");
 }

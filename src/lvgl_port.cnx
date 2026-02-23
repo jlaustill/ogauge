@@ -47,13 +47,6 @@ scope LvglPort {
     this.last_tick <- global.millis();
   }
 
-  public void create_demo_label() {
-    lv_obj_t scr <- global.lv_screen_active();
-    lv_obj_t label <- global.lv_label_create(scr);
-    global.lv_label_set_text(label, "OGauge");
-    global.lv_obj_center(label);
-  }
-
   public void loop() {
     u32 now <- global.millis();
     u32 elapsed <- now - this.last_tick;
