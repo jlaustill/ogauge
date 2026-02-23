@@ -35,6 +35,9 @@ scope GaugeSpeed {
     global.lv_obj_set_style_length(this.scale, 5, LV_PART_ITEMS);
     global.lv_obj_set_style_length(this.scale, 10, LV_PART_INDICATOR);
 
+    // Speed zone sections: green 0-60, yellow 60-100, red 100-160
+    global.lvgl_helper_add_speed_sections(this.scale);
+
     // Background: dark circle
     global.lv_obj_set_style_bg_opa(this.scale, LV_OPA_COVER, LV_PART_MAIN);
     global.lvgl_helper_obj_style_bg_color_hex(this.scale, 0x1A1A2E, LV_PART_MAIN);
