@@ -7,6 +7,14 @@ scope GaugeSpeed {
   lv_obj_t scale;
   lv_obj_t needle;
   lv_obj_t speed_label;
+  lv_obj_t arc;
+
+  void on_arc_changed(lv_event_t e) {
+    lv_obj_t target <- global.lv_event_get_target_obj(e);
+    i32 speed <- global.lv_arc_get_value(target);
+    global.lv_scale_set_line_needle_value(this.scale, this.needle, -10, speed);
+    global.lvgl_helper_label_set_speed(this.speed_label, speed);
+  }
 
   public void create() {
     lv_obj_t scr <- global.lv_screen_active();
@@ -38,14 +46,31 @@ scope GaugeSpeed {
     global.lv_obj_set_style_line_rounded(this.needle, true, LV_PART_MAIN);
     global.lvgl_helper_obj_style_line_color_hex(this.needle, 0xFF4444, LV_PART_MAIN);
 
-    // Set needle to 80 mph (static demo)
-    global.lv_scale_set_line_needle_value(this.scale, this.needle, -10, 80);
-
     // Center speed label
     this.speed_label <- global.lv_label_create(scr);
-    global.lvgl_helper_label_set_speed(this.speed_label, 80);
+    global.lvgl_helper_label_set_speed(this.speed_label, 0);
     global.lv_obj_center(this.speed_label);
     global.lv_obj_set_style_text_font(this.speed_label, lv_font_montserrat_40, LV_PART_MAIN);
     global.lvgl_helper_obj_style_text_color_hex(this.speed_label, 0xFFFFFF, LV_PART_MAIN);
+
+    // Invisible arc overlay for touch input (must be AFTER scale to be on top)
+    this.arc <- global.lv_arc_create(scr);
+    global.lv_obj_set_size(this.arc, 420, 420);
+    global.lv_obj_center(this.arc);
+    global.lv_arc_set_range(this.arc, 0, 160);
+    global.lv_arc_set_value(this.arc, 0);
+    global.lv_arc_set_bg_angles(this.arc, 0, 270);
+    global.lv_arc_set_rotation(this.arc, 135);
+
+    // Make arc fully invisible (touch still works)
+    global.lv_obj_set_style_arc_opa(this.arc, LV_OPA_TRANSP, LV_PART_MAIN);
+    global.lv_obj_set_style_arc_opa(this.arc, LV_OPA_TRANSP, LV_PART_INDICATOR);
+    global.lv_obj_set_style_bg_opa(this.arc, LV_OPA_TRANSP, LV_PART_KNOB);
+
+    // Wire touch events
+    global.lv_obj_add_event_cb(this.arc, this.on_arc_changed, LV_EVENT_VALUE_CHANGED, 0);
+
+    // Set initial needle position
+    global.lv_scale_set_line_needle_value(this.scale, this.needle, -10, 0);
   }
 }
