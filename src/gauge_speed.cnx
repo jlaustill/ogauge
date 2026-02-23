@@ -1,0 +1,51 @@
+#include <lvgl.h>
+#include "lvgl_helpers.h"
+
+scope GaugeSpeed {
+  const u32 SCALE_MODE_ROUND_INNER <- 0x08;
+
+  lv_obj_t scale;
+  lv_obj_t needle;
+  lv_obj_t speed_label;
+
+  public void create() {
+    lv_obj_t scr <- global.lv_screen_active();
+
+    // Scale: 420x420, centered, 270-degree arc
+    this.scale <- global.lv_scale_create(scr);
+    global.lv_obj_set_size(this.scale, 420, 420);
+    global.lv_obj_center(this.scale);
+    global.lv_scale_set_mode(this.scale, this.SCALE_MODE_ROUND_INNER);
+    global.lv_scale_set_range(this.scale, 0, 160);
+    global.lv_scale_set_angle_range(this.scale, 270);
+    global.lv_scale_set_rotation(this.scale, 135);
+    global.lv_scale_set_total_tick_count(this.scale, 33);
+    global.lv_scale_set_major_tick_every(this.scale, 4);
+    global.lv_scale_set_label_show(this.scale, true);
+
+    // Tick styling: minor=5px, major=10px
+    global.lv_obj_set_style_length(this.scale, 5, LV_PART_ITEMS);
+    global.lv_obj_set_style_length(this.scale, 10, LV_PART_INDICATOR);
+
+    // Background: dark circle
+    global.lv_obj_set_style_bg_opa(this.scale, LV_OPA_COVER, LV_PART_MAIN);
+    global.lvgl_helper_obj_style_bg_color_hex(this.scale, 0x1A1A2E, LV_PART_MAIN);
+    global.lv_obj_set_style_radius(this.scale, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+
+    // Line needle: child of scale
+    this.needle <- global.lv_line_create(this.scale);
+    global.lv_obj_set_style_line_width(this.needle, 6, LV_PART_MAIN);
+    global.lv_obj_set_style_line_rounded(this.needle, true, LV_PART_MAIN);
+    global.lvgl_helper_obj_style_line_color_hex(this.needle, 0xFF4444, LV_PART_MAIN);
+
+    // Set needle to 80 mph (static demo)
+    global.lv_scale_set_line_needle_value(this.scale, this.needle, -10, 80);
+
+    // Center speed label
+    this.speed_label <- global.lv_label_create(scr);
+    global.lvgl_helper_label_set_speed(this.speed_label, 80);
+    global.lv_obj_center(this.speed_label);
+    global.lv_obj_set_style_text_font(this.speed_label, lv_font_montserrat_40, LV_PART_MAIN);
+    global.lvgl_helper_obj_style_text_color_hex(this.speed_label, 0xFFFFFF, LV_PART_MAIN);
+  }
+}
