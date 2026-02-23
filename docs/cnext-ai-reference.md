@@ -59,6 +59,7 @@ u8[4][8] matrix;                 // multi-dimensional
 
 usize len <- buffer.element_count;  // 256 (compile-time)
 u32 bits <- buffer.bit_length;      // 2048 (compile-time)
+u32 bytes <- buffer.byte_length;    // 256 (compile-time)
 ```
 
 **Rules:**
@@ -72,6 +73,7 @@ u32 bits <- buffer.bit_length;      // 2048 (compile-time)
 string<64> name <- "Hello";         // 64-char max capacity
 u32 len <- name.char_count;         // runtime: strlen → 5
 u32 cap <- name.capacity;           // compile-time: 64
+u32 sz <- name.size;                // compile-time: 65 (capacity + null terminator)
 string<5> sub <- name[0, 5];        // substring
 string<96> joined <- name + " World"; // concat (capacity >= sum of operand capacities)
 const string VERSION <- "1.0.0";    // auto-sized
@@ -531,8 +533,9 @@ C-Next enforces several MISRA C:2012 rules at the language level:
 
 | Rule | Enforcement |
 |------|-------------|
-| 13.5 | No function calls in `if`/`while` conditions |
+| 10.1 | No signed shift operands; hex masks use unsigned literals |
 | 12.2 | Shift amount must be < type bit width |
+| 13.5 | No function calls in `if`/`while` conditions |
 | 9.3 | No partial array initialization |
 | 17.2 | No recursion |
 | 10.3 | No implicit narrowing conversions |
@@ -696,11 +699,7 @@ bitmap8 Good {
 
 ## Known Transpiler Bugs
 
-### #882: Anonymous struct compound literal (OPEN)
-C++ anonymous struct members can't be initialized inline. Workaround: set flags separately after struct init.
-
-### #883: Callback pointer signatures (OPEN)
-Opaque types as function params transpile as values instead of pointers. Primitive buffer params (`u8`) don't match callback typedef pointer signatures. Non-opaque structs work correctly (ADR-006 pass-by-reference). **Blocks LVGL integration.**
+No known bugs as of v0.2.7.
 
 ## Transpilation Summary
 
