@@ -12,7 +12,8 @@
 /*====================
    MEMORY SETTINGS
  *====================*/
-#define LV_MEM_CUSTOM 1  /* Use stdlib malloc/free instead of LVGL's internal allocator */
+#define LV_MEM_CUSTOM 0                /* Use LVGL's built-in allocator (no stdlib malloc) */
+#define LV_MEM_SIZE (128U * 1024U)     /* 128KB static pool */
 
 /*====================
    DISPLAY SETTINGS
