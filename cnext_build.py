@@ -19,7 +19,7 @@ def transpile_cnext():
     for cnx_file in cnx_files:
         try:
             result = subprocess.run(
-                ["cnext", str(cnx_file)],
+                ["cnext", str(cnx_file), "--include", "src", "-D", "LV_CONF_INCLUDE_SIMPLE"],
                 check=True,
                 capture_output=True,
                 text=True

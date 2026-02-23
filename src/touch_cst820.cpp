@@ -5,7 +5,7 @@
 
 #include "touch_cst820.hpp"
 
-#include "tca9554.h"
+#include "tca9554.hpp"
 #include <Arduino.h>
 #include <Wire.h>
 

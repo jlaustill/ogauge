@@ -34,6 +34,11 @@
 #define LV_FONT_DEFAULT &lv_font_montserrat_14
 
 /*====================
+   WIDGET SETTINGS
+ *====================*/
+#define LV_USE_LABEL 1
+
+/*====================
    THEME SETTINGS
  *====================*/
 #define LV_USE_THEME_DEFAULT 1

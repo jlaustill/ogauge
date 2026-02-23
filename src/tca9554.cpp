@@ -5,7 +5,7 @@
 
 #include "tca9554.hpp"
 
-#include "i2c_driver.h"
+#include "i2c_driver.hpp"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -25,5 +25,5 @@ void TCA9554_set_pin(uint8_t pin, bool state) {
 
 bool TCA9554_read_pin(uint8_t pin) {
     uint8_t bits = I2C_read_byte(0x20, 0x00U);
-    return ((bits >> pin - 1) & 1);
+    return ((bits >> pin - 1U) & 1);
 }

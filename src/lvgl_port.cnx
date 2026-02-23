@@ -1,6 +1,7 @@
 #include "display_st7701.cnx"
 #include "touch_cst820.cnx"
 #include <lvgl.h>
+#include "lvgl_helpers.h"
 #include <Arduino.h>
 #include <esp_lcd_panel_ops.h>
 
@@ -44,6 +45,13 @@ scope LvglPort {
     global.lv_indev_set_read_cb(indev, this.touch_read);
 
     this.last_tick <- global.millis();
+  }
+
+  public void create_demo_label() {
+    lv_obj_t scr <- global.lv_screen_active();
+    lv_obj_t label <- global.lv_label_create(scr);
+    global.lv_label_set_text(label, "OGauge");
+    global.lv_obj_center(label);
   }
 
   public void loop() {
