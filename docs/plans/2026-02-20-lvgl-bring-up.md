@@ -21,13 +21,13 @@
 | Task | Status | Notes |
 |------|--------|-------|
 | Task 1: LVGL dependency | **DONE** | Committed `1411fef` |
-| Task 2: lv_conf.h | **DONE** | Committed `68c7987`, needs static pool update |
-| Task 3: Update lv_conf.h for static pool | Ready | |
-| Task 4: Add get_panel() to Display | Ready | |
-| Task 5: Create lvgl_port.cnx | Ready | |
-| Task 6: Update main.cnx | Ready | Depends on Task 5 |
-| Task 7: Transpile and verify C output | Ready | Depends on Tasks 3-6 |
-| Task 8: Build and flash | Ready | Depends on Task 7 |
+| Task 2: lv_conf.h | **DONE** | Committed `68c7987` |
+| Task 3: Update lv_conf.h for static pool | **DONE** | Committed `294562e` |
+| Task 4: Add get_panel() to Display | **DONE** | Committed `6c79e06` |
+| Task 5: Create lvgl_port.cnx | **BLOCKED** | C-Next bug #937: callback params dereferenced when forwarded to global. calls |
+| Task 6: Update main.cnx | Waiting | Depends on Task 5 |
+| Task 7: Transpile and verify C output | Waiting | Depends on Tasks 5-6 |
+| Task 8: Build and flash | Waiting | Depends on Task 7 |
 
 ---
 
