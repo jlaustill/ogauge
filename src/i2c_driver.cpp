@@ -3,7 +3,7 @@
  * A safer C for embedded systems
  */
 
-#include "i2c_driver.h"
+#include "i2c_driver.hpp"
 
 #include <Wire.h>
 
@@ -20,7 +20,7 @@ uint8_t I2C_read_byte(uint8_t addr, uint8_t reg) {
     Wire.beginTransmission(addr);
     Wire.write(reg);
     uint8_t err = Wire.endTransmission(true);
-    if (err) {
+    if (err != 0) {
         printf("I2C read failed\r\n");
         return 0;
     }
@@ -33,7 +33,7 @@ bool I2C_write_byte(uint8_t addr, uint8_t reg, uint8_t data) {
     Wire.write(reg);
     Wire.write(data);
     uint8_t err = Wire.endTransmission(true);
-    if (err) {
+    if (err != 0) {
         printf("I2C write failed\r\n");
         return false;
     }
