@@ -1,6 +1,7 @@
 #include "tca9554.cnx"
 #include <Arduino.h>
 #include <driver/spi_master.h>
+#include <esp_lcd_types.h>
 #include <esp_lcd_panel_ops.h>
 #include <esp_lcd_panel_rgb.h>
 #include <freertos/FreeRTOS.h>
@@ -274,5 +275,9 @@ scope Display {
       global.esp_lcd_panel_draw_bitmap(this.panel_handle, 0, i, this.LCD_WIDTH, i + 1, buf);
       i <- i + 1;
     }
+  }
+
+  public esp_lcd_panel_handle_t get_panel() {
+    return this.panel_handle;
   }
 }

@@ -3,7 +3,7 @@
  * A safer C for embedded systems
  */
 
-#include "touch_cst820.h"
+#include "touch_cst820.hpp"
 
 #include "tca9554.h"
 #include <Arduino.h>

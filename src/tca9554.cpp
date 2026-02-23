@@ -3,7 +3,7 @@
  * A safer C for embedded systems
  */
 
-#include "tca9554.h"
+#include "tca9554.hpp"
 
 #include "i2c_driver.h"
 
@@ -19,7 +19,7 @@ void TCA9554_init(uint8_t pin_modes) {
 
 void TCA9554_set_pin(uint8_t pin, bool state) {
     uint8_t current = I2C_read_byte(0x20, 0x01);
-    current = (current & ~(1 << pin - 1)) | ((state ? 1 : 0) << pin - 1);
+    current = (current & ~(1U << pin - 1)) | ((state ? 1U : 0U) << pin - 1);
     I2C_write_byte(0x20, 0x01, current);
 }
 

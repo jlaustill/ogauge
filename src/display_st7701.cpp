@@ -3,11 +3,12 @@
  * A safer C for embedded systems
  */
 
-#include "display_st7701.h"
+#include "display_st7701.hpp"
 
 #include "tca9554.h"
 #include <Arduino.h>
 #include <driver/spi_master.h>
+#include <esp_lcd_types.h>
 #include <esp_lcd_panel_ops.h>
 #include <esp_lcd_panel_rgb.h>
 #include <freertos/FreeRTOS.h>
@@ -307,4 +308,8 @@ void Display_fill_color(uint16_t color) {
         esp_lcd_panel_draw_bitmap(Display_panel_handle, 0, i, 480, i + 1, buf);
         i = i + 1U;
     }
+}
+
+esp_lcd_panel_handle_t Display_get_panel(void) {
+    return Display_panel_handle;
 }
