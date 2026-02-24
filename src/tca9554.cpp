@@ -19,11 +19,11 @@ void TCA9554_init(uint8_t pin_modes) {
 
 void TCA9554_set_pin(uint8_t pin, bool state) {
     uint8_t current = I2C_read_byte(0x20, 0x01);
-    current = (current & ~(1U << pin - 1)) | ((state ? 1U : 0U) << pin - 1);
+    current = (uint8_t)((current & ~(1U << pin - 1)) | ((state ? 1U : 0U) << pin - 1));
     I2C_write_byte(0x20, 0x01, current);
 }
 
 bool TCA9554_read_pin(uint8_t pin) {
     uint8_t bits = I2C_read_byte(0x20, 0x00U);
-    return ((bits >> pin - 1U) & 1);
+    return ((bits >> pin - 1) & 1);
 }
