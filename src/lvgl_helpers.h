@@ -16,6 +16,17 @@
 #include <lvgl.h>
 #include <inttypes.h>
 
+/* ─── Handle typedef for scope variables (bug #948 workaround) ─── */
+
+/*
+ * lv_obj_t is a forward-declared struct. C-Next scope variables of this type
+ * generate as value types (static lv_obj_t x = {}) instead of pointers.
+ * A pointer typedef makes the transpiler treat it as a handle type, matching
+ * the esp_lcd_panel_handle_t pattern that already works.
+ * TODO: Remove when #948 is fixed (transpiler handles incomplete struct scope vars).
+ */
+typedef lv_obj_t * lv_obj_handle_t;
+
 /* ─── Label widget (behind #if LV_USE_LABEL) ─── */
 
 lv_obj_t * lv_label_create(lv_obj_t * parent);
@@ -25,6 +36,12 @@ void lv_label_set_text(lv_obj_t * obj, const char * text);
 
 lv_obj_t * lv_scale_create(lv_obj_t * parent);
 void lv_scale_set_mode(lv_obj_t * obj, lv_scale_mode_t mode);
+
+/* Set scale to round-inner mode (avoids int→enum conversion in C++) */
+static inline void lvgl_helper_scale_set_round_inner(lv_obj_t * scale)
+{
+    lv_scale_set_mode(scale, LV_SCALE_MODE_ROUND_INNER);
+}
 void lv_scale_set_total_tick_count(lv_obj_t * obj, uint32_t total_tick_count);
 void lv_scale_set_major_tick_every(lv_obj_t * obj, uint32_t major_tick_every);
 void lv_scale_set_label_show(lv_obj_t * obj, bool show_label);
@@ -80,6 +97,14 @@ static inline void lvgl_helper_obj_style_text_color_hex(
     lv_obj_t * obj, uint32_t hex, lv_style_selector_t sel)
 {
     lv_obj_set_style_text_color(obj, lv_color_hex(hex), sel);
+}
+
+/* ─── C helper: font reference (needs & on global, C-Next can't do &) ─── */
+
+static inline void lvgl_helper_obj_style_text_font_40(
+    lv_obj_t * obj, lv_style_selector_t sel)
+{
+    lv_obj_set_style_text_font(obj, &lv_font_montserrat_40, sel);
 }
 
 /* ─── C helper: variadic label format + PRId32 ─── */

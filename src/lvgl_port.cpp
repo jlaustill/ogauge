@@ -50,13 +50,6 @@ void LvglPort_init(void) {
     LvglPort_last_tick = millis();
 }
 
-void LvglPort_create_demo_label(void) {
-    lv_obj_t* scr = lv_screen_active();
-    lv_obj_t* label = lv_label_create(scr);
-    lv_label_set_text(label, "OGauge");
-    lv_obj_center(label);
-}
-
 void LvglPort_loop(void) {
     uint32_t now = millis();
     uint32_t elapsed = now - LvglPort_last_tick;

@@ -8,10 +8,11 @@
 #include "display_st7701.hpp"
 #include "touch_cst820.hpp"
 #include "lvgl_port.hpp"
+#include "gauge_speed.hpp"
 
 void setup(void) {
     Serial.begin(115200);
-    Serial.println("OGauge: LVGL bring-up");
+    Serial.println("OGauge: Needle gauge demo");
     Serial.println("I2C init...");
     I2C_init();
     Serial.println("TCA9554 init...");
@@ -23,7 +24,8 @@ void setup(void) {
     Serial.println("LVGL init...");
     lv_init();
     LvglPort_init();
-    LvglPort_create_demo_label();
+    Serial.println("Gauge init...");
+    GaugeSpeed_create();
     Serial.println("Ready!");
 }
 
