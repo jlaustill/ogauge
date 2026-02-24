@@ -1,5 +1,6 @@
 #include <lvgl.h>
 #include "lvgl_helpers.h"
+#include "needle_img.h"
 
 scope GaugeSpeed {
   lv_obj_handle_t scale;
@@ -10,30 +11,42 @@ scope GaugeSpeed {
   void on_arc_changed(lv_event_t e) {
     lv_obj_t target <- global.lv_event_get_target_obj(e);
     i32 speed <- global.lv_arc_get_value(target);
-    global.lv_scale_set_line_needle_value(this.scale, this.needle, -10, speed);
+    global.lv_scale_set_image_needle_value(this.scale, this.needle, speed);
     global.lvgl_helper_label_set_speed(this.speed_label, speed);
   }
 
   public void create() {
     lv_obj_t scr <- global.lv_screen_active();
 
+    // Dark screen background (matches gauge, no white border)
+    global.lvgl_helper_obj_style_bg_color_hex(scr, 0x1A1A2E, LV_PART_MAIN);
+
     // Scale: 420x420, centered, 270-degree arc
     this.scale <- global.lv_scale_create(scr);
     global.lv_obj_set_size(this.scale, 420, 420);
     global.lv_obj_center(this.scale);
     global.lvgl_helper_scale_set_round_inner(this.scale);
-    global.lv_scale_set_range(this.scale, 0, 160);
+    global.lv_scale_set_range(this.scale, 0, 85);
     global.lv_scale_set_angle_range(this.scale, 270);
     global.lv_scale_set_rotation(this.scale, 135);
-    global.lv_scale_set_total_tick_count(this.scale, 33);
-    global.lv_scale_set_major_tick_every(this.scale, 4);
+    global.lv_scale_set_total_tick_count(this.scale, 18);
+    global.lv_scale_set_major_tick_every(this.scale, 2);
     global.lv_scale_set_label_show(this.scale, true);
 
-    // Tick styling: minor=5px, major=10px
-    global.lv_obj_set_style_length(this.scale, 5, LV_PART_ITEMS);
-    global.lv_obj_set_style_length(this.scale, 10, LV_PART_INDICATOR);
+    // Tick styling: length, width, color
+    global.lv_obj_set_style_length(this.scale, 12, LV_PART_ITEMS);
+    global.lv_obj_set_style_line_width(this.scale, 2, LV_PART_ITEMS);
+    global.lvgl_helper_obj_style_line_color_hex(this.scale, 0xCCCCCC, LV_PART_ITEMS);
 
-    // Speed zone sections: green 0-60, yellow 60-100, red 100-160
+    global.lv_obj_set_style_length(this.scale, 20, LV_PART_INDICATOR);
+    global.lv_obj_set_style_line_width(this.scale, 3, LV_PART_INDICATOR);
+    global.lvgl_helper_obj_style_line_color_hex(this.scale, 0xFFFFFF, LV_PART_INDICATOR);
+
+    // Scale labels: white, Montserrat 24
+    global.lvgl_helper_obj_style_text_color_hex(this.scale, 0xFFFFFF, LV_PART_INDICATOR);
+    global.lvgl_helper_obj_style_text_font_24(this.scale, LV_PART_INDICATOR);
+
+    // Speed zone sections: green 0-80, orange 80-85
     global.lvgl_helper_add_speed_sections(this.scale);
 
     // Background: dark circle
@@ -41,16 +54,13 @@ scope GaugeSpeed {
     global.lvgl_helper_obj_style_bg_color_hex(this.scale, 0x1A1A2E, LV_PART_MAIN);
     global.lv_obj_set_style_radius(this.scale, LV_RADIUS_CIRCLE, LV_PART_MAIN);
 
-    // Line needle: child of scale
-    this.needle <- global.lv_line_create(this.scale);
-    global.lv_obj_set_style_line_width(this.needle, 6, LV_PART_MAIN);
-    global.lv_obj_set_style_line_rounded(this.needle, true, LV_PART_MAIN);
-    global.lvgl_helper_obj_style_line_color_hex(this.needle, 0xFF4444, LV_PART_MAIN);
+    // Image needle: child of scale
+    this.needle <- global.lvgl_helper_create_needle_img(this.scale);
 
     // Center speed label
     this.speed_label <- global.lv_label_create(scr);
     global.lvgl_helper_label_set_speed(this.speed_label, 0);
-    global.lv_obj_center(this.speed_label);
+    global.lv_obj_align(this.speed_label, LV_ALIGN_CENTER, 0, 120);
     global.lvgl_helper_obj_style_text_font_40(this.speed_label, LV_PART_MAIN);
     global.lvgl_helper_obj_style_text_color_hex(this.speed_label, 0xFFFFFF, LV_PART_MAIN);
 
@@ -58,7 +68,7 @@ scope GaugeSpeed {
     this.arc <- global.lv_arc_create(scr);
     global.lv_obj_set_size(this.arc, 420, 420);
     global.lv_obj_center(this.arc);
-    global.lv_arc_set_range(this.arc, 0, 160);
+    global.lv_arc_set_range(this.arc, 0, 85);
     global.lv_arc_set_value(this.arc, 0);
     global.lv_arc_set_bg_angles(this.arc, 0, 270);
     global.lv_arc_set_rotation(this.arc, 135);
@@ -72,6 +82,6 @@ scope GaugeSpeed {
     global.lv_obj_add_event_cb(this.arc, this.on_arc_changed, LV_EVENT_VALUE_CHANGED, 0);
 
     // Set initial needle position
-    global.lv_scale_set_line_needle_value(this.scale, this.needle, -10, 0);
+    global.lv_scale_set_image_needle_value(this.scale, this.needle, 0);
   }
 }

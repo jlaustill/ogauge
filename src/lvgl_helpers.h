@@ -73,6 +73,14 @@ int32_t lv_arc_get_value(const lv_obj_t * obj);
 
 lv_obj_t * lv_line_create(lv_obj_t * parent);
 
+/* ─── Image widget (behind #if LV_USE_IMAGE) ─── */
+
+lv_obj_t * lv_image_create(lv_obj_t * parent);
+void lv_image_set_src(lv_obj_t * obj, const void * src);
+void lv_image_set_pivot(lv_obj_t * obj, int32_t x, int32_t y);
+void lv_scale_set_image_needle_value(lv_obj_t * obj, lv_obj_t * needle_img,
+                                      int32_t value);
+
 /* ─── C helpers: lv_color_t value-type workaround ─── */
 
 /*
@@ -101,6 +109,12 @@ static inline void lvgl_helper_obj_style_text_color_hex(
 
 /* ─── C helper: font reference (needs & on global, C-Next can't do &) ─── */
 
+static inline void lvgl_helper_obj_style_text_font_24(
+    lv_obj_t * obj, lv_style_selector_t sel)
+{
+    lv_obj_set_style_text_font(obj, &lv_font_montserrat_24, sel);
+}
+
 static inline void lvgl_helper_obj_style_text_font_40(
     lv_obj_t * obj, lv_style_selector_t sel)
 {
@@ -126,10 +140,9 @@ static inline void lvgl_helper_label_set_speed(lv_obj_t * label, int32_t speed)
 static inline void lvgl_helper_add_speed_sections(lv_obj_t * scale)
 {
     static lv_style_t green_main, green_ind, green_items;
-    static lv_style_t yellow_main, yellow_ind, yellow_items;
-    static lv_style_t red_main, red_ind, red_items;
+    static lv_style_t orange_main, orange_ind, orange_items;
 
-    /* Green zone: 0-60 mph */
+    /* Green zone: 0-80 mph */
     lv_style_init(&green_main);
     lv_style_set_arc_color(&green_main, lv_color_hex(0x44BB44));
     lv_style_set_arc_width(&green_main, 8);
@@ -139,40 +152,25 @@ static inline void lvgl_helper_add_speed_sections(lv_obj_t * scale)
     lv_style_set_line_color(&green_items, lv_color_hex(0x44BB44));
 
     lv_scale_section_t * green = lv_scale_add_section(scale);
-    lv_scale_set_section_range(scale, green, 0, 60);
+    lv_scale_set_section_range(scale, green, 0, 80);
     lv_scale_set_section_style_main(scale, green, &green_main);
     lv_scale_set_section_style_indicator(scale, green, &green_ind);
     lv_scale_set_section_style_items(scale, green, &green_items);
 
-    /* Yellow zone: 60-100 mph */
-    lv_style_init(&yellow_main);
-    lv_style_set_arc_color(&yellow_main, lv_color_hex(0xDDCC22));
-    lv_style_set_arc_width(&yellow_main, 8);
-    lv_style_init(&yellow_ind);
-    lv_style_set_line_color(&yellow_ind, lv_color_hex(0xDDCC22));
-    lv_style_init(&yellow_items);
-    lv_style_set_line_color(&yellow_items, lv_color_hex(0xDDCC22));
+    /* Orange zone: 80-85 mph */
+    lv_style_init(&orange_main);
+    lv_style_set_arc_color(&orange_main, lv_color_hex(0xFF8C00));
+    lv_style_set_arc_width(&orange_main, 8);
+    lv_style_init(&orange_ind);
+    lv_style_set_line_color(&orange_ind, lv_color_hex(0xFF8C00));
+    lv_style_init(&orange_items);
+    lv_style_set_line_color(&orange_items, lv_color_hex(0xFF8C00));
 
-    lv_scale_section_t * yellow = lv_scale_add_section(scale);
-    lv_scale_set_section_range(scale, yellow, 60, 100);
-    lv_scale_set_section_style_main(scale, yellow, &yellow_main);
-    lv_scale_set_section_style_indicator(scale, yellow, &yellow_ind);
-    lv_scale_set_section_style_items(scale, yellow, &yellow_items);
-
-    /* Red zone: 100-160 mph */
-    lv_style_init(&red_main);
-    lv_style_set_arc_color(&red_main, lv_color_hex(0xDD3333));
-    lv_style_set_arc_width(&red_main, 8);
-    lv_style_init(&red_ind);
-    lv_style_set_line_color(&red_ind, lv_color_hex(0xDD3333));
-    lv_style_init(&red_items);
-    lv_style_set_line_color(&red_items, lv_color_hex(0xDD3333));
-
-    lv_scale_section_t * red = lv_scale_add_section(scale);
-    lv_scale_set_section_range(scale, red, 100, 160);
-    lv_scale_set_section_style_main(scale, red, &red_main);
-    lv_scale_set_section_style_indicator(scale, red, &red_ind);
-    lv_scale_set_section_style_items(scale, red, &red_items);
+    lv_scale_section_t * orange = lv_scale_add_section(scale);
+    lv_scale_set_section_range(scale, orange, 80, 85);
+    lv_scale_set_section_style_main(scale, orange, &orange_main);
+    lv_scale_set_section_style_indicator(scale, orange, &orange_ind);
+    lv_scale_set_section_style_items(scale, orange, &orange_items);
 }
 
 #endif /* LVGL_HELPERS_H */
