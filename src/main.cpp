@@ -9,6 +9,7 @@
 #include "touch_cst820.hpp"
 #include "lvgl_port.hpp"
 #include "gauge_speed.hpp"
+#include "data/twai_driver.hpp"
 
 void setup(void) {
     Serial.begin(115200);
@@ -26,10 +27,13 @@ void setup(void) {
     LvglPort_init();
     Serial.println("Gauge init...");
     GaugeSpeed_create();
+    Serial.println("TWAI init...");
+    TwaiDriver_init();
     Serial.println("Ready!");
 }
 
 void loop(void) {
+    TwaiDriver_poll();
     LvglPort_loop();
     delay(5);
 }

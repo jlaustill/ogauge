@@ -4,31 +4,25 @@ import sys
 from pathlib import Path
 
 def transpile_cnext():
-    """Transpile all .cnx files before build"""
-    # Find all .cnx files in src directory
-    src_dir = Path("src")
-    if not src_dir.exists():
+    """Transpile from main.cnx entry point — cnext follows includes"""
+    entry = Path("src/main.cnx")
+    if not entry.exists():
         return
 
-    cnx_files = list(src_dir.rglob("*.cnx"))
-    if not cnx_files:
-        return
+    print("Transpiling from main.cnx...")
 
-    print(f"Transpiling {len(cnx_files)} c-next files...")
-
-    for cnx_file in cnx_files:
-        try:
-            result = subprocess.run(
-                ["cnext", str(cnx_file), "--include", "src", "-D", "LV_CONF_INCLUDE_SIMPLE"],
-                check=True,
-                capture_output=True,
-                text=True
-            )
-            print(f"  ✓ {cnx_file.name}")
-        except subprocess.CalledProcessError as e:
-            print(f"  ✗ Error: {cnx_file.name}")
-            print(e.stderr)
-            sys.exit(1)
+    try:
+        result = subprocess.run(
+            ["cnext", str(entry), "--include", "src", "-D", "LV_CONF_INCLUDE_SIMPLE"],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        print(result.stdout.strip())
+    except subprocess.CalledProcessError as e:
+        print(f"  ✗ Transpilation failed")
+        print(e.stderr)
+        sys.exit(1)
 
 # Run transpilation at import time (before compilation starts)
 transpile_cnext()
