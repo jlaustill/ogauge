@@ -2,6 +2,10 @@
 
 A complete reference for AI code generation. C-Next transpiles to C/C++. Every rule here maps to transpiler behavior — if you violate a rule, the transpiler will reject it.
 
+---
+
+# Part 1: Core Language
+
 ## Operators
 
 ```
@@ -160,6 +164,24 @@ u8 low <- big[0, 8];          // bits 0-7 → 0xEF
 u8 high <- big[24, 8];        // bits 24-31 → 0xDE
 ```
 
+### Zero-Extension on Wider Target Fields
+
+Writing a narrow value into a wider bit field **zero-fills the remaining bits**. The transpiler clears the entire target window before writing.
+
+```cnx
+// Assembling a 12-bit value from wire protocol bytes:
+u16 x;
+x[0, 8] <- lo_byte;          // write 8 bits into bits [0..7]
+x[8, 8] <- hi_byte[0, 4];    // write 4-bit value into 8-bit field
+                               // bits [8..11] get the value, [12..15] zeroed
+```
+
+This eliminates the need to zero the variable first. The generated C clears the full target window via mask:
+```c
+// x[8,8] <- hi_byte[0,4] generates:
+x = (uint16_t)((x & ~(0xFFU << 8)) | ((((hi_byte) & 0x0F) & 0xFFU) << 8));
+```
+
 ## Type Casting Rules
 
 ```
@@ -181,7 +203,7 @@ u32 add(u32 a, u32 b) {
 ```
 
 **Rules:**
-- Define before use (no forward declarations)
+- Define before use (no forward declarations) — applies within scopes too
 - No recursion (MISRA 17.2)
 - No `break`/`continue` — use structured conditions
 
@@ -385,105 +407,6 @@ scope LvglPort {
 
 `this.functionName` passes the scope function as a callback.
 
-## Nullable C Interop (ADR-046)
-
-C-Next types are never null. C library return values that CAN be null require `c_` prefix.
-
-```cnx
-#include <stdio.h>
-
-// Nullable C return → requires c_ prefix
-FILE c_file <- fopen("data.txt", "r");
-if (c_file != NULL) {
-    // use c_file
-    fclose(c_file);
-}
-
-// Non-nullable C-Next variable → NO c_ prefix
-string<64> buffer;                   // always valid
-u32 count <- 0;                      // always valid
-```
-
-**Rules:**
-- `c_` prefix REQUIRED for variables holding nullable C pointer returns
-- `c_` prefix FORBIDDEN on non-nullable types (error E0906)
-- NULL comparison only allowed on `c_`-prefixed variables
-- `malloc`/`calloc`/`realloc`/`free` FORBIDDEN (ADR-003)
-
-### When c_ IS Needed
-
-| Returns pointer that can be NULL | Example |
-|---|---|
-| `fopen()` | `FILE c_file <- fopen(...)` |
-| `lv_display_create()` | `lv_display_t c_disp <- lv_display_create(...)` |
-| `lv_label_create()` | `lv_obj_t c_label <- lv_label_create(...)` |
-
-### When c_ is NOT Needed
-
-| Returns non-pointer or C-Next type | Example |
-|---|---|
-| Primitive return values | `u32 len <- strlen(s)` |
-| C-Next variables | `u32 count <- 0` |
-| Scope members | `this.value` |
-
-## C Library Interop
-
-### Calling C Functions
-
-C functions from included headers are called with `global.` prefix (or bare if unambiguous):
-
-```cnx
-#include <Arduino.h>
-
-void setup() {
-    Serial.begin(115200);            // implicit global resolution
-    global.pinMode(LED_PIN, OUTPUT); // explicit global
-    delay(100);                      // implicit global
-}
-```
-
-### Using C Types
-
-C types from headers (structs, typedefs, enums) are used directly:
-
-```cnx
-#include <driver/spi_master.h>
-
-spi_bus_config_t cfg <- {
-    mosi_io_num: 1,
-    miso_io_num: -1,
-    sclk_io_num: 2,
-    quadwp_io_num: -1,
-    quadhd_io_num: -1,
-    max_transfer_sz: 64
-};
-```
-
-### Opaque/Handle Types
-
-C libraries often use opaque pointer types (e.g., `esp_lcd_panel_handle_t` = `void*`). These work as scope variables and function parameters. The transpiler manages the pointer nature.
-
-```cnx
-scope Display {
-    esp_lcd_panel_handle_t panel_handle;    // stored as pointer internally
-
-    public void init() {
-        esp_lcd_new_rgb_panel(rgb_config, this.panel_handle);
-        esp_lcd_panel_init(this.panel_handle);
-    }
-}
-```
-
-### Anonymous Struct Flags Workaround
-
-C structs with anonymous nested structs (common in ESP-IDF) can't use compound literal initialization for the nested part in C++. Set flags separately:
-
-```cnx
-// Can't init flags inline due to C++ anonymous struct limitation
-esp_lcd_rgb_panel_config_t cfg <- { /* other fields */ };
-cfg.flags.fb_in_psram <- true;       // set flag after init
-```
-
 ## Atomic Types (ADR-049)
 
 ```cnx
@@ -535,7 +458,8 @@ C-Next enforces several MISRA C:2012 rules at the language level:
 |------|-------------|
 | 10.1 | No signed shift operands; hex masks use unsigned literals |
 | 12.2 | Shift amount must be < type bit width |
-| 13.5 | No function calls in `if`/`while` conditions |
+| 13.5 | No function calls in `if`/`while`/`do-while` conditions |
+| 14.4 | Conditions must be boolean comparisons, not bare variables |
 | 9.3 | No partial array initialization |
 | 17.2 | No recursion |
 | 10.3 | No implicit narrowing conversions |
@@ -546,10 +470,17 @@ C-Next enforces several MISRA C:2012 rules at the language level:
 ```cnx
 // WRONG: function call in condition
 if (config.enabled && manager.isReady()) { }
+while (global.twai_receive(msg, 0) = ESP_OK) { }
 
 // RIGHT: extract to variable
 bool ready <- manager.isReady();
 if (config.enabled && ready) { }
+
+esp_err_t result <- global.twai_receive(msg, 0);
+while (result = ESP_OK) {
+    this.process(msg);
+    result <- global.twai_receive(msg, 0);
+}
 ```
 
 ### MISRA 12.2 Pattern
@@ -564,7 +495,166 @@ u16 wide <- val;
 u16 result <- wide << 8;            // OK: 8 < 16
 ```
 
-## Common AI Mistakes
+---
+
+# Part 2: C/C++ Interop
+
+## Calling C Functions
+
+C functions from included headers are called with `global.` prefix (or bare if unambiguous):
+
+```cnx
+#include <Arduino.h>
+
+void setup() {
+    Serial.begin(115200);            // implicit global resolution
+    global.pinMode(LED_PIN, OUTPUT); // explicit global
+    delay(100);                      // implicit global
+}
+```
+
+## Using C Struct Types
+
+C struct types from headers work with named field initialization:
+
+```cnx
+#include <driver/spi_master.h>
+
+spi_bus_config_t cfg <- {
+    mosi_io_num: 1,
+    miso_io_num: -1,
+    sclk_io_num: 2,
+    quadwp_io_num: -1,
+    quadhd_io_num: -1,
+    max_transfer_sz: 64
+};
+```
+
+Locally initialized C structs are passed by reference automatically (ADR-006):
+```cnx
+// twai_driver_install expects pointers — transpiler adds & automatically
+esp_err_t err <- global.twai_driver_install(g_config, t_config, f_config);
+// generates: twai_driver_install(&g_config, &t_config, &f_config);
+```
+
+## Using C Enum Types
+
+C enum types from headers work as variable types and constant values:
+
+```cnx
+#include <driver/twai.h>
+#include <driver/gpio.h>
+
+// Use C enum type directly with its constants
+const gpio_num_t TX_PIN <- GPIO_NUM_19;
+const gpio_num_t RX_PIN <- GPIO_NUM_20;
+
+// In struct initialization
+twai_general_config_t cfg <- {
+    mode: TWAI_MODE_NORMAL,        // twai_mode_t enum value
+    tx_io: TX_PIN,                 // gpio_num_t enum value
+    rx_io: RX_PIN
+};
+```
+
+**Important:** C++ is strict about int-to-enum conversion. Use the enum constants (`GPIO_NUM_19`) not bare integers (`19`), or the C++ compiler will reject it.
+
+## C Struct Member Access
+
+### Union and Bitfield Members
+
+C structs with unions and bitfields are accessed directly:
+
+```cnx
+twai_message_t msg;
+// Bitfield access in union
+if (msg.extd = 1) {              // extended frame flag
+    u32 id <- msg.identifier;    // 29-bit CAN ID
+}
+u8 dlc <- msg.data_length_code;  // regular field
+```
+
+### Array Fields
+
+Array members on C structs are indexed normally:
+
+```cnx
+u8 i <- 0;
+while (i < msg.data_length_code) {
+    global.Serial.print(msg.data[i], 16);    // hex print each byte
+    i +<- 1;
+}
+```
+
+## Opaque/Handle Types
+
+C libraries often use opaque pointer types (e.g., `esp_lcd_panel_handle_t` = `void*`). These work as scope variables and function parameters. The transpiler manages the pointer nature.
+
+```cnx
+scope Display {
+    esp_lcd_panel_handle_t panel_handle;    // stored as pointer internally
+
+    public void init() {
+        esp_lcd_new_rgb_panel(rgb_config, this.panel_handle);
+        esp_lcd_panel_init(this.panel_handle);
+    }
+}
+```
+
+## Nullable C Interop (ADR-046)
+
+C-Next types are never null. C library return values that CAN be null require `c_` prefix.
+
+```cnx
+#include <stdio.h>
+
+// Nullable C return → requires c_ prefix
+FILE c_file <- fopen("data.txt", "r");
+if (c_file != NULL) {
+    // use c_file
+    fclose(c_file);
+}
+
+// Non-nullable C-Next variable → NO c_ prefix
+string<64> buffer;                   // always valid
+u32 count <- 0;                      // always valid
+```
+
+**Rules:**
+- `c_` prefix REQUIRED for variables holding nullable C pointer returns
+- `c_` prefix FORBIDDEN on non-nullable types (error E0906)
+- NULL comparison only allowed on `c_`-prefixed variables
+- `malloc`/`calloc`/`realloc`/`free` FORBIDDEN (ADR-003)
+
+### When c_ IS Needed
+
+| Returns pointer that can be NULL | Example |
+|---|---|
+| `fopen()` | `FILE c_file <- fopen(...)` |
+| `lv_display_create()` | `lv_display_t c_disp <- lv_display_create(...)` |
+| `lv_label_create()` | `lv_obj_t c_label <- lv_label_create(...)` |
+
+### When c_ is NOT Needed
+
+| Returns non-pointer or C-Next type | Example |
+|---|---|
+| Primitive return values | `u32 len <- strlen(s)` |
+| C-Next variables | `u32 count <- 0` |
+| Scope members | `this.value` |
+
+## Anonymous Struct Flags Workaround
+
+C structs with anonymous nested structs (common in ESP-IDF) can't use compound literal initialization for the nested part in C++. Set flags separately:
+
+```cnx
+// Can't init flags inline due to C++ anonymous struct limitation
+esp_lcd_rgb_panel_config_t cfg <- { /* other fields */ };
+cfg.flags.fb_in_psram <- true;       // set flag after init
+```
+
+---
+
+# Part 3: Common AI Mistakes
 
 ### 1. Wrong assignment/comparison operators
 ```cnx
@@ -627,14 +717,21 @@ do { } while (running = true);
 u32 x <- (flag = true) ? 1 : 0;
 ```
 
-### 7. Function call in if condition
+### 7. Function call in if/while condition
 ```cnx
 // WRONG — MISRA 13.5
 if (sensor.read() > threshold) { }
+while (queue.pop(item) = true) { }
 
 // RIGHT
 u32 val <- sensor.read();
 if (val > threshold) { }
+
+bool got <- queue.pop(item);
+while (got = true) {
+    process(item);
+    got <- queue.pop(item);
+}
 ```
 
 ### 8. Narrowing cast
@@ -697,9 +794,18 @@ bitmap8 Good {
 }
 ```
 
-## Known Transpiler Bugs
+### 13. Using integer for C enum fields
+```cnx
+// WRONG — C++ rejects int-to-enum conversion
+twai_general_config_t cfg <- { tx_io: 19, rx_io: 20 };
 
-No known bugs as of v0.2.7.
+// RIGHT — use enum constants
+twai_general_config_t cfg <- { tx_io: GPIO_NUM_19, rx_io: GPIO_NUM_20 };
+```
+
+---
+
+# Part 4: Transpilation Reference
 
 ## Transpilation Summary
 
@@ -719,6 +825,14 @@ No known bugs as of v0.2.7.
 | `s.capacity` | `64` |
 | `flags[3] <- true` | bit-set expression |
 | `val[0, 8]` | `(val >> 0) & 0xFF` |
+| `x[8,8] <- v[0,4]` | clear 8-bit window + write 4-bit value (zero-extended) |
 | `atomic u32 x` | `volatile uint32_t x` + LDREX/STREX |
 | `critical { ... }` | PRIMASK save/disable/restore |
 | `#include "x.cnx"` | `#include "x.h"` |
+
+## Known Transpiler Issues
+
+| Issue | Version | Status |
+|-------|---------|--------|
+| #967: Symbol cache cross-language conflict on scoped method names | v0.2.12 | OPEN |
+| Workaround: set `noCache: true` in `cnext.config.json` | | |
