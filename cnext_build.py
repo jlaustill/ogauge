@@ -13,7 +13,7 @@ def transpile_cnext():
 
     try:
         result = subprocess.run(
-            ["cnext", str(entry), "--include", "src", "-D", "LV_CONF_INCLUDE_SIMPLE"],
+            ["cnext", str(entry), "-D", "LV_CONF_INCLUDE_SIMPLE"],
             check=True,
             capture_output=True,
             text=True

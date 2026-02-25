@@ -7,6 +7,7 @@
 
 #include <driver/twai.h>
 #include <Arduino.h>
+#include <J1939Message.hpp>
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -72,11 +73,41 @@ static void TwaiDriver_print_frame(const twai_message_t& msg) {
     Serial.println("");
 }
 
+static void TwaiDriver_print_j1939(const J1939Message& j_msg) {
+    uint16_t pgn = j_msg.pgn;
+    Serial.print("  J1939  PGN:");
+    Serial.print(pgn);
+    Serial.print(" (0x");
+    if (pgn < 0x1000) {
+        Serial.print("0");
+    }
+    if (pgn < 0x0100) {
+        Serial.print("0");
+    }
+    if (pgn < 0x0010) {
+        Serial.print("0");
+    }
+    Serial.print(pgn, 16);
+    Serial.print(")  SRC:0x");
+    uint8_t src = j_msg.sourceAddress;
+    if (src < 0x10) {
+        Serial.print("0");
+    }
+    Serial.print(src, 16);
+    Serial.print("  PRI:");
+    Serial.println(j_msg.priority);
+}
+
 void TwaiDriver_poll(void) {
     twai_message_t msg = {0};
     esp_err_t result = twai_receive(&msg, 0);
     while (result == ESP_OK) {
         TwaiDriver_print_frame(msg);
+        J1939Message j_msg = {0};
+        J1939_init(j_msg);
+        J1939_setCanId(j_msg, msg.identifier);
+        J1939_setData(j_msg, msg.data);
+        TwaiDriver_print_j1939(j_msg);
         result = twai_receive(&msg, 0);
     }
 }

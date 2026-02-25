@@ -1,5 +1,6 @@
 #include <driver/twai.h>
 #include <Arduino.h>
+#include <J1939Message.cnx>
 
 scope TwaiDriver {
   const gpio_num_t TX_PIN <- GPIO_NUM_19;
@@ -80,11 +81,36 @@ scope TwaiDriver {
     global.Serial.println("");
   }
 
+  void print_j1939(J1939Message j_msg) {
+    u16 pgn <- j_msg.pgn;
+
+    global.Serial.print("  J1939  PGN:");
+    global.Serial.print(pgn);
+    global.Serial.print(" (0x");
+    if (pgn < 0x1000) { global.Serial.print("0"); }
+    if (pgn < 0x0100) { global.Serial.print("0"); }
+    if (pgn < 0x0010) { global.Serial.print("0"); }
+    global.Serial.print(pgn, 16);
+    global.Serial.print(")  SRC:0x");
+    u8 src <- j_msg.sourceAddress;
+    if (src < 0x10) { global.Serial.print("0"); }
+    global.Serial.print(src, 16);
+    global.Serial.print("  PRI:");
+    global.Serial.println(j_msg.priority);
+  }
+
   public void poll() {
     twai_message_t msg;
     esp_err_t result <- global.twai_receive(msg, 0);
     while (result = ESP_OK) {
       this.print_frame(msg);
+
+      J1939Message j_msg;
+      J1939.init(j_msg);
+      J1939.setCanId(j_msg, msg.identifier);
+      J1939.setData(j_msg, msg.data);
+      this.print_j1939(j_msg);
+
       result <- global.twai_receive(msg, 0);
     }
   }

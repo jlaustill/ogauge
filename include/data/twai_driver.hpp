@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <J1939Message.hpp>
 
 #ifdef __cplusplus
 extern "C" {
