@@ -8,7 +8,7 @@
 #include "display_st7701.hpp"
 #include "touch_cst820.hpp"
 #include "lvgl_port.hpp"
-#include "gauge_speed.hpp"
+#include "gauge_temp.hpp"
 #include "data/twai_driver.hpp"
 
 void setup(void) {
@@ -26,7 +26,7 @@ void setup(void) {
     lv_init();
     LvglPort_init();
     Serial.println("Gauge init...");
-    GaugeSpeed_create();
+    GaugeTemp_create();
     Serial.println("TWAI init...");
     TwaiDriver_init();
     Serial.println("Ready!");
@@ -34,6 +34,7 @@ void setup(void) {
 
 void loop(void) {
     TwaiDriver_poll();
+    GaugeTemp_set_value(TwaiDriver_ambient_temp);
     LvglPort_loop();
     delay(5);
 }

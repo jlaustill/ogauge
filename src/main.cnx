@@ -3,7 +3,7 @@
 #include "display_st7701.cnx"
 #include "touch_cst820.cnx"
 #include "lvgl_port.cnx"
-#include "gauge_speed.cnx"
+#include "gauge_temp.cnx"
 #include "data/twai_driver.cnx"
 
 void setup() {
@@ -27,7 +27,7 @@ void setup() {
   LvglPort.init();
 
   Serial.println("Gauge init...");
-  GaugeSpeed.create();
+  GaugeTemp.create();
 
   Serial.println("TWAI init...");
   TwaiDriver.init();
@@ -37,6 +37,7 @@ void setup() {
 
 void loop() {
   TwaiDriver.poll();
+  GaugeTemp.set_value(TwaiDriver.ambient_temp);
   LvglPort.loop();
   delay(5);
 }

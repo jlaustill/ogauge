@@ -14,6 +14,9 @@
 extern "C" {
 #endif
 
+/* External variables */
+extern int32_t TwaiDriver_ambient_temp;
+
 /* Function prototypes */
 void TwaiDriver_init(void);
 void TwaiDriver_poll(void);

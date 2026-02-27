@@ -6,6 +6,8 @@ scope TwaiDriver {
   const gpio_num_t TX_PIN <- GPIO_NUM_19;
   const gpio_num_t RX_PIN <- GPIO_NUM_20;
 
+  public i32 ambient_temp <- -40;
+
   public void init() {
     twai_general_config_t g_config <- {
       mode: TWAI_MODE_NORMAL,
@@ -99,6 +101,20 @@ scope TwaiDriver {
     global.Serial.println(j_msg.priority);
   }
 
+  // SPN 171: Ambient Air Temperature from PGN 65269, bytes 3-4
+  // msg must be a parameter (not local) for correct array access codegen
+  void decode_spn171(twai_message_t msg) {
+    u8 i <- 3;
+    u8 byte3 <- msg.data[i];
+    i <- 4;
+    u8 byte4 <- msg.data[i];
+    u16 raw <- 0;
+    raw[0, 8] <- byte3;
+    raw[8, 8] <- byte4;
+    i32 raw_wide <- raw[0, 16];
+    this.ambient_temp <- raw_wide / 32 - 273;
+  }
+
   public void poll() {
     twai_message_t msg;
     esp_err_t result <- global.twai_receive(msg, 0);
@@ -110,6 +126,11 @@ scope TwaiDriver {
       J1939.setCanId(j_msg, msg.identifier);
       J1939.setData(j_msg, msg.data);
       this.print_j1939(j_msg);
+
+      u16 pgn <- j_msg.pgn;
+      if (pgn = 65269) {
+        this.decode_spn171(msg);
+      }
 
       result <- global.twai_receive(msg, 0);
     }

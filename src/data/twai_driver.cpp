@@ -13,6 +13,7 @@
 #include <stdbool.h>
 
 /* Scope: TwaiDriver */
+int32_t TwaiDriver_ambient_temp = -40;
 
 void TwaiDriver_init(void) {
     twai_general_config_t g_config = (twai_general_config_t){ .mode = TWAI_MODE_NORMAL, .tx_io = GPIO_NUM_19, .rx_io = GPIO_NUM_20, .clkout_io = TWAI_IO_UNUSED, .bus_off_io = TWAI_IO_UNUSED, .tx_queue_len = 0, .rx_queue_len = 32, .alerts_enabled = TWAI_ALERT_NONE, .clkout_divider = 0, .intr_flags = 0 };
@@ -98,6 +99,18 @@ static void TwaiDriver_print_j1939(const J1939Message& j_msg) {
     Serial.println(j_msg.priority);
 }
 
+static void TwaiDriver_decode_spn171(const twai_message_t& msg) {
+    uint8_t i = 3U;
+    uint8_t byte3 = msg.data[i];
+    i = 4U;
+    uint8_t byte4 = msg.data[i];
+    uint16_t raw = 0U;
+    raw = (uint16_t)((raw & ~(0xFFU << 0)) | ((byte3 & 0xFFU) << 0));
+    raw = (uint16_t)((raw & ~(0xFFU << 8)) | ((byte4 & 0xFFU) << 8));
+    int32_t raw_wide = ((raw) & 0xFFFFU);
+    TwaiDriver_ambient_temp = raw_wide / 32 - 273;
+}
+
 void TwaiDriver_poll(void) {
     twai_message_t msg = {0};
     esp_err_t result = twai_receive(&msg, 0);
@@ -108,6 +121,10 @@ void TwaiDriver_poll(void) {
         J1939_setCanId(j_msg, msg.identifier);
         J1939_setData(j_msg, msg.data);
         TwaiDriver_print_j1939(j_msg);
+        uint16_t pgn = j_msg.pgn;
+        if (pgn == 65269) {
+            TwaiDriver_decode_spn171(msg);
+        }
         result = twai_receive(&msg, 0);
     }
 }
