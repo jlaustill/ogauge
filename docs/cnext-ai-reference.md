@@ -331,12 +331,16 @@ scope LED {
 ## Includes
 
 ```cnx
-#include "local_file.cnx"           // transpiles to: #include "local_file.h"
+#include "local_file.cnx"           // relative to this file → #include "local_file.hpp"
+#include <J1939Message.cnx>          // searches cnext include paths → #include <J1939Message.hpp>
 #include <Arduino.h>                 // C/C++ header (passed through)
 #include <lvgl.h>                    // external library header
 ```
 
-C-Next `.cnx` includes transpile to `.h` includes. C/C++ headers pass through unchanged.
+- Quoted `.cnx` includes resolve **relative to the including file**
+- Angle bracket `.cnx` includes resolve via **cnext config `include` array** (for external libraries like PlatformIO lib_deps)
+- In C++ mode (`cppRequired: true`), `.cnx` includes transpile to `.hpp`. In C mode, `.h`
+- C/C++ headers pass through unchanged
 
 ## Preprocessor
 
@@ -642,6 +646,80 @@ u32 count <- 0;                      // always valid
 | C-Next variables | `u32 count <- 0` |
 | Scope members | `this.value` |
 
+## C Boundary Layer for void* (ADR-061)
+
+C-Next has **no void\* type** by design. When a C function takes `void*` (e.g., `lv_image_set_src`), you MUST write a thin C boundary file. Data stays in `.cnx`, only the unsafe cast lives in `.h/.c`.
+
+**Pattern:** `.cnx` (safe data) → `.h` boundary (unsafe void* cast) → C library
+
+```cnx
+// --- needle_img.cnx (safe data in C-Next) ---
+#include <lvgl.h>
+
+scope NeedleImg {
+    public u8[14400] map <- [0x00, 0x00, /* ... */];
+    public lv_image_dsc_t dsc <- {
+        header: {cf: LV_COLOR_FORMAT_ARGB8888, w: 180, h: 20},
+        data_size: 14400,
+        data: this.map                  // scope var ref works in struct init
+    };
+}
+```
+
+```c
+// --- needle_img_boundary.h (C boundary — void* cast only) ---
+#include "needle_img.hpp"              // generated header from .cnx
+static inline lv_obj_t * create_needle_img(lv_obj_t * parent) {
+    lv_obj_t * img = lv_image_create(parent);
+    lv_image_set_src(img, &NeedleImg_dsc);  // void* cast happens in C
+    return img;
+}
+```
+
+```cnx
+// --- gauge.cnx (uses the boundary wrapper) ---
+#include "needle_img.cnx"
+#include "needle_img_boundary.h"
+
+scope Gauge {
+    public void create() {
+        lv_obj_t scale <- lv_scale_create(scr);
+        lv_obj_t needle <- global.create_needle_img(scale);
+    }
+}
+```
+
+**Rules:**
+- The `.h` boundary file MUST have a different base name than the `.cnx` file (E0504)
+- Keep boundary files minimal — only the void* cast, nothing else
+- Data, constants, and descriptors belong in `.cnx`
+
+## Variadic C Function Calls
+
+C variadic functions (`printf`, `lv_label_set_text_fmt`, etc.) work directly — no wrapper needed:
+
+```cnx
+global.lv_label_set_text_fmt(this.speed_label, "%d mph", speed);
+// generates: lv_label_set_text_fmt(GaugeSpeed_speed_label, "%d mph", *speed);
+```
+
+## Scope Variable References in Struct Initializers
+
+Scope variables can be referenced in struct initializers, including arrays that decay to pointers in C:
+
+```cnx
+scope NeedleImg {
+    public u8[14400] map <- [ /* data */ ];
+    public lv_image_dsc_t dsc <- {
+        header: {cf: LV_COLOR_FORMAT_ARGB8888, w: 180, h: 20},
+        data_size: 14400,
+        data: this.map                  // → .data = NeedleImg_map
+    };
+}
+```
+
+Nested struct init with C enum constants works — enum values resolve inside nested fields.
+
 ## Anonymous Struct Flags Workaround
 
 C structs with anonymous nested structs (common in ESP-IDF) can't use compound literal initialization for the nested part in C++. Set flags separately:
@@ -803,6 +881,28 @@ twai_general_config_t cfg <- { tx_io: 19, rx_io: 20 };
 twai_general_config_t cfg <- { tx_io: GPIO_NUM_19, rx_io: GPIO_NUM_20 };
 ```
 
+### 14. Trying to pass void* in C-Next
+```cnx
+// WRONG — C-Next has no void* (ADR-061)
+global.lv_image_set_src(img, this.dsc);     // ERROR: can't convert to void*
+
+// RIGHT — use a C boundary file for void* casts
+// In .h boundary: lv_image_set_src(img, &NeedleImg_dsc);
+// In .cnx: call the C wrapper
+lv_obj_t needle <- global.create_needle_img(this.scale);
+```
+
+### 15. Same base name for .h and .cnx files
+```cnx
+// WRONG — E0504: same base name conflict
+#include "needle_img.cnx"
+#include "needle_img.h"                 // ERROR: needle_img exists as .cnx
+
+// RIGHT — use a different name for the boundary file
+#include "needle_img.cnx"
+#include "needle_img_boundary.h"        // different base name — OK
+```
+
 ---
 
 # Part 4: Transpilation Reference
@@ -828,11 +928,11 @@ twai_general_config_t cfg <- { tx_io: GPIO_NUM_19, rx_io: GPIO_NUM_20 };
 | `x[8,8] <- v[0,4]` | clear 8-bit window + write 4-bit value (zero-extended) |
 | `atomic u32 x` | `volatile uint32_t x` + LDREX/STREX |
 | `critical { ... }` | PRIMASK save/disable/restore |
-| `#include "x.cnx"` | `#include "x.h"` |
+| `#include "x.cnx"` | `#include "x.hpp"` (C++ mode) / `#include "x.h"` (C mode) |
+| `#include <x.cnx>` | `#include <x.hpp>` (C++ mode) / `#include <x.h>` (C mode) |
 
 ## Known Transpiler Issues
 
 | Issue | Version | Status |
 |-------|---------|--------|
-| #967: Symbol cache cross-language conflict on scoped method names | v0.2.12 | OPEN |
-| Workaround: set `noCache: true` in `cnext.config.json` | | |
+| #967: Symbol cache cross-language conflict on scoped method names | v0.2.12 | FIXED (v0.2.15) |
