@@ -1,7 +1,6 @@
 #include "display_st7701.cnx"
 #include "touch_cst820.cnx"
 #include <lvgl.h>
-#include "lvgl_helpers.h"
 #include <Arduino.h>
 #include <esp_lcd_panel_ops.h>
 
