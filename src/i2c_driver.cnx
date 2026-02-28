@@ -4,11 +4,11 @@ scope I2C {
   const i32 SDA_PIN <- 15;
   const i32 SCL_PIN <- 7;
 
-  public void init() {
+  void init() {
     Wire.begin(this.SDA_PIN, this.SCL_PIN);
   }
 
-  public u8 read_byte(u8 addr, u8 reg) {
+  u8 read_byte(u8 addr, u8 reg) {
     Wire.beginTransmission(addr);
     Wire.write(reg);
     u8 err <- Wire.endTransmission(true);
@@ -20,7 +20,7 @@ scope I2C {
     return Wire.read();
   }
 
-  public bool write_byte(u8 addr, u8 reg, u8 data) {
+  bool write_byte(u8 addr, u8 reg, u8 data) {
     Wire.beginTransmission(addr);
     Wire.write(reg);
     Wire.write(data);

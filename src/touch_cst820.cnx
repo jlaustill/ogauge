@@ -12,20 +12,20 @@ scope Touch {
   u16 x <- 0;
   u16 y <- 0;
 
-  void reset() {
+  private void reset() {
     global.TCA9554.set_pin(EXIO_TOUCH_RST, false);
     global.delay(10);
     global.TCA9554.set_pin(EXIO_TOUCH_RST, true);
     global.delay(50);
   }
 
-  public void init() {
+  void init() {
     this.reset();
     global.I2C.write_byte(ADDRESS, REG_DISABLE_SLEEP, 0xFF);
     global.Serial.println("Touch: CST820 initialized");
   }
 
-  public bool read() {
+  bool read() {
     Wire.beginTransmission(ADDRESS);
     Wire.write(REG_TOUCH_DATA);
     Wire.endTransmission(false);
@@ -43,11 +43,11 @@ scope Touch {
     return (points > 0);
   }
 
-  public u16 get_x() {
+  u16 get_x() {
     return x;
   }
 
-  public u16 get_y() {
+  u16 get_y() {
     return y;
   }
 }

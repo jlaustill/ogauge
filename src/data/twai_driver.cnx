@@ -8,7 +8,7 @@ scope TwaiDriver {
 
   public i32 ambient_temp <- -40;
 
-  public void init() {
+  void init() {
     twai_general_config_t g_config <- {
       mode: TWAI_MODE_NORMAL,
       tx_io: TX_PIN,
@@ -51,7 +51,7 @@ scope TwaiDriver {
     global.Serial.println("TWAI: started at 250kbps");
   }
 
-  void print_frame(twai_message_t msg) {
+  private void print_frame(twai_message_t msg) {
     u32 id <- msg.identifier;
 
     global.Serial.print("can0  ");
@@ -83,7 +83,7 @@ scope TwaiDriver {
     global.Serial.println("");
   }
 
-  void print_j1939(J1939Message j_msg) {
+  private void print_j1939(J1939Message j_msg) {
     u16 pgn <- j_msg.pgn;
 
     global.Serial.print("  J1939  PGN:");
@@ -101,21 +101,7 @@ scope TwaiDriver {
     global.Serial.println(j_msg.priority);
   }
 
-  // SPN 171: Ambient Air Temperature from PGN 65269, bytes 3-4
-  // msg must be a parameter (not local) for correct array access codegen
-  void decode_spn171(twai_message_t msg) {
-    u8 i <- 3;
-    u8 byte3 <- msg.data[i];
-    i <- 4;
-    u8 byte4 <- msg.data[i];
-    u16 raw <- 0;
-    raw[0, 8] <- byte3;
-    raw[8, 8] <- byte4;
-    i32 raw_wide <- raw[0, 16];
-    this.ambient_temp <- raw_wide / 32 - 273;
-  }
-
-  public void poll() {
+  void poll() {
     twai_message_t msg;
     esp_err_t result <- global.twai_receive(msg, 0);
     while (result = ESP_OK) {
@@ -127,9 +113,14 @@ scope TwaiDriver {
       J1939.setData(j_msg, msg.data);
       this.print_j1939(j_msg);
 
+      // SPN 171: Ambient Air Temperature from PGN 65269, bytes 3-4
       u16 pgn <- j_msg.pgn;
       if (pgn = 65269) {
-        this.decode_spn171(msg);
+        u16 raw <- 0;
+        raw[0, 8] <- msg.data[3];
+        raw[8, 8] <- msg.data[4];
+        i32 raw_wide <- raw[0, 16];
+        this.ambient_temp <- raw_wide / 32 - 273;
       }
 
       result <- global.twai_receive(msg, 0);

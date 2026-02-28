@@ -17,18 +17,18 @@ scope GaugeTemp {
   lv_style_t orange_ind;
   lv_style_t orange_items;
 
-  public void set_value(i32 temp_c) {
+  void set_value(i32 temp_c) {
     global.lv_scale_set_image_needle_value(this.scale, this.needle, temp_c);
     global.lv_label_set_text_fmt(this.temp_label, "%d C", temp_c);
   }
 
-  void on_arc_changed(lv_event_t e) {
+  private void on_arc_changed(lv_event_t e) {
     lv_obj_t target <- global.lv_event_get_target_obj(e);
     i32 temp <- global.lv_arc_get_value(target);
     this.set_value(temp);
   }
 
-  public void create() {
+  void create() {
     lv_obj_t scr <- global.lv_screen_active();
 
     // Dark screen background

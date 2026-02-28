@@ -5,18 +5,18 @@ scope TCA9554 {
   const u8 OUTPUT_REG <- 0x01;
   const u8 CONFIG_REG <- 0x03;
 
-  public void init(u8 pin_modes) {
+  void init(u8 pin_modes) {
     global.I2C.write_byte(this.ADDRESS, this.OUTPUT_REG, 0x00);
     global.I2C.write_byte(this.ADDRESS, this.CONFIG_REG, pin_modes);
   }
 
-  public void set_pin(u8 pin, bool state) {
+  void set_pin(u8 pin, bool state) {
     u8 current <- global.I2C.read_byte(this.ADDRESS, this.OUTPUT_REG);
     current[pin - 1] <- state;
     global.I2C.write_byte(this.ADDRESS, this.OUTPUT_REG, current);
   }
 
-  public bool read_pin(u8 pin) {
+  bool read_pin(u8 pin) {
     u8 bits <- global.I2C.read_byte(this.ADDRESS, 0x00);
     return bits[pin - 1];
   }

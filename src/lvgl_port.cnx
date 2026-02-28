@@ -14,14 +14,14 @@ scope LvglPort {
   u32 last_tick;
   esp_lcd_panel_handle_t panel;
 
-  void disp_flush(lv_display_t disp, const lv_area_t area, u8 px_map) {
+  private void disp_flush(lv_display_t disp, const lv_area_t area, u8 px_map) {
     i32 x2_end <- area.x2 + 1;
     i32 y2_end <- area.y2 + 1;
     global.esp_lcd_panel_draw_bitmap(this.panel, area.x1, area.y1, x2_end, y2_end, px_map);
     global.lv_display_flush_ready(disp);
   }
 
-  void touch_read(lv_indev_t indev, lv_indev_data_t data) {
+  private void touch_read(lv_indev_t indev, lv_indev_data_t data) {
     bool touched <- global.Touch.read();
     if (touched = true) {
       data.point.x <- global.Touch.get_x();
@@ -32,7 +32,7 @@ scope LvglPort {
     }
   }
 
-  public void init() {
+  void init() {
     this.panel <- global.Display.get_panel();
 
     lv_display_t disp <- global.lv_display_create(this.LCD_WIDTH, this.LCD_HEIGHT);
@@ -46,7 +46,7 @@ scope LvglPort {
     this.last_tick <- global.millis();
   }
 
-  public void loop() {
+  void loop() {
     u32 now <- global.millis();
     u32 elapsed <- now - this.last_tick;
     this.last_tick <- now;

@@ -19,7 +19,7 @@ scope Display {
   spi_device_handle_t spi_handle;
   esp_lcd_panel_handle_t panel_handle;
 
-  void spi_cmd(u8 cmd) {
+  private void spi_cmd(u8 cmd) {
     spi_transaction_t txn <- {
       cmd: 0,
       addr: cmd,
@@ -29,7 +29,7 @@ scope Display {
     global.spi_device_transmit(this.spi_handle, txn);
   }
 
-  void spi_data(u8 data) {
+  private void spi_data(u8 data) {
     spi_transaction_t txn <- {
       cmd: 1,
       addr: data,
@@ -39,24 +39,24 @@ scope Display {
     global.spi_device_transmit(this.spi_handle, txn);
   }
 
-  void cs_enable() {
+  private void cs_enable() {
     global.TCA9554.set_pin(this.EXIO_SPI_CS, false);
     global.vTaskDelay(global.pdMS_TO_TICKS(10));
   }
 
-  void cs_disable() {
+  private void cs_disable() {
     global.TCA9554.set_pin(this.EXIO_SPI_CS, true);
     global.vTaskDelay(global.pdMS_TO_TICKS(10));
   }
 
-  void reset() {
+  private void reset() {
     global.TCA9554.set_pin(this.EXIO_LCD_RST, false);
     global.vTaskDelay(global.pdMS_TO_TICKS(10));
     global.TCA9554.set_pin(this.EXIO_LCD_RST, true);
     global.vTaskDelay(global.pdMS_TO_TICKS(50));
   }
 
-  void spi_init() {
+  private void spi_init() {
     spi_bus_config_t buscfg <- {
       mosi_io_num: this.SPI_MOSI_PIN,
       miso_io_num: -1,
@@ -78,7 +78,7 @@ scope Display {
     global.spi_bus_add_device(SPI2_HOST, devcfg, this.spi_handle);
   }
 
-  void st7701_init() {
+  private void st7701_init() {
     this.cs_enable();
 
     // Page 1: Display settings
@@ -220,7 +220,7 @@ scope Display {
     this.cs_disable();
   }
 
-  void rgb_panel_init() {
+  private void rgb_panel_init() {
     esp_lcd_rgb_panel_config_t rgb_config <- {
       clk_src: LCD_CLK_SRC_PLL160M,
       timings: {
@@ -249,13 +249,13 @@ scope Display {
     global.esp_lcd_panel_init(this.panel_handle);
   }
 
-  void backlight_init() {
+  private void backlight_init() {
     global.ledcSetup(0, 20000, 10);
     global.ledcAttachPin(this.BACKLIGHT_PIN, 0);
     global.ledcWrite(0, 500);
   }
 
-  public void init() {
+  void init() {
     this.reset();
     this.spi_init();
     this.st7701_init();
@@ -263,7 +263,7 @@ scope Display {
     this.backlight_init();
   }
 
-  public void fill_color(u16 color) {
+  void fill_color(u16 color) {
     u16[480] buf;
     u32 i <- 0;
     while (i < 480) {
@@ -277,7 +277,7 @@ scope Display {
     }
   }
 
-  public esp_lcd_panel_handle_t get_panel() {
+  esp_lcd_panel_handle_t get_panel() {
     return this.panel_handle;
   }
 }
