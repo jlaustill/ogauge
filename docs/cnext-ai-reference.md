@@ -185,9 +185,10 @@ x = (uint16_t)((x & ~(0xFFU << 8)) | ((((hi_byte) & 0x0F) & 0xFFU) << 8));
 ## Type Casting Rules
 
 ```
-WIDENING (implicit, safe):     u8 → u32, i8 → i32
+WIDENING (implicit, safe):     u8 → u32, i8 → i32  (same sign only)
 NARROWING (FORBIDDEN):         u32 → u8   — use bit indexing: val[0, 8]
 SIGN CHANGE (FORBIDDEN):       i32 → u32  — use bit indexing: val[0, 32]
+CROSS-SIGN WIDEN (FORBIDDEN):  u16 → i32  — use bit indexing: val[0, 16]
 FLOAT TRUNCATION (allowed):    (u32)floatVal — truncates fractional part
 POINTER CAST (NOT SUPPORTED):  use register keyword for MMIO
 ```
@@ -275,13 +276,13 @@ Scopes are singleton modules with automatic name prefixing.
 
 ```cnx
 scope Counter {
-    u32 value <- 0;                 // private (default)
+    private u32 value <- 0;         // private — must be explicit
 
-    public void increment() {       // public — accessible outside
+    void increment() {              // public (default for scope functions)
         this.value +<- 1;
     }
 
-    public u32 get() {
+    u32 get() {
         return this.value;
     }
 }
@@ -318,9 +319,9 @@ scope Foo {
 
 ```cnx
 scope LED {
-    u32 pin <- 13;                    // → static uint32_t LED_pin = 13;
-    public void on() { }             // → void LED_on(void) { }
-    void helper() { }                // → static void LED_helper(void) { }
+    private u32 pin <- 13;            // → static uint32_t LED_pin = 13;
+    void on() { }                    // → void LED_on(void) { } (public by default)
+    private void helper() { }        // → static void LED_helper(void) { }
 }
 ```
 
@@ -398,11 +399,11 @@ controller.handler(msg);             // always safe to call
 
 ```cnx
 scope LvglPort {
-    void disp_flush(lv_display_t disp, const lv_area_t area, u8 px_map) {
+    private void disp_flush(lv_display_t disp, const lv_area_t area, u8 px_map) {
         // ...
     }
 
-    public void init() {
+    void init() {
         lv_display_t disp <- lv_display_create(480, 480);
         lv_display_set_flush_cb(disp, this.disp_flush);
     }
@@ -596,9 +597,9 @@ C libraries often use opaque pointer types (e.g., `esp_lcd_panel_handle_t` = `vo
 
 ```cnx
 scope Display {
-    esp_lcd_panel_handle_t panel_handle;    // stored as pointer internally
+    private esp_lcd_panel_handle_t panel_handle;    // stored as pointer internally
 
-    public void init() {
+    void init() {
         esp_lcd_new_rgb_panel(rgb_config, this.panel_handle);
         esp_lcd_panel_init(this.panel_handle);
     }
@@ -657,8 +658,8 @@ C-Next has **no void\* type** by design. When a C function takes `void*` (e.g., 
 #include <lvgl.h>
 
 scope NeedleImg {
-    public u8[14400] map <- [0x00, 0x00, /* ... */];
-    public lv_image_dsc_t dsc <- {
+    u8[14400] map <- [0x00, 0x00, /* ... */];
+    lv_image_dsc_t dsc <- {
         header: {cf: LV_COLOR_FORMAT_ARGB8888, w: 180, h: 20},
         data_size: 14400,
         data: this.map                  // scope var ref works in struct init
@@ -682,7 +683,7 @@ static inline lv_obj_t * create_needle_img(lv_obj_t * parent) {
 #include "needle_img_boundary.h"
 
 scope Gauge {
-    public void create() {
+    void create() {
         lv_obj_t scale <- lv_scale_create(scr);
         lv_obj_t needle <- global.create_needle_img(scale);
     }
@@ -709,8 +710,8 @@ Scope variables can be referenced in struct initializers, including arrays that 
 
 ```cnx
 scope NeedleImg {
-    public u8[14400] map <- [ /* data */ ];
-    public lv_image_dsc_t dsc <- {
+    u8[14400] map <- [ /* data */ ];
+    lv_image_dsc_t dsc <- {
         header: {cf: LV_COLOR_FORMAT_ARGB8888, w: 180, h: 20},
         data_size: 14400,
         data: this.map                  // → .data = NeedleImg_map
@@ -903,6 +904,25 @@ lv_obj_t needle <- global.create_needle_img(this.scale);
 #include "needle_img_boundary.h"        // different base name — OK
 ```
 
+### 16. C-style string concatenation with macros
+```cnx
+// WRONG — C-Next parser doesn't support adjacent string literal concatenation with macros
+global.lv_label_set_text_fmt(label, "%" PRId32 " C", temp);
+
+// RIGHT — use format specifier directly
+global.lv_label_set_text_fmt(label, "%d C", temp);
+```
+
+### 17. Sign change on widening assignment
+```cnx
+// WRONG — u16 → i32 is FORBIDDEN even though u16 fits in i32 (sign changes)
+u16 raw <- 7456;
+i32 wide <- raw;                        // ERROR: sign change (unsigned → signed)
+
+// RIGHT — use bit extraction to widen across sign boundary
+i32 wide <- raw[0, 16];                 // explicit 16-bit extraction → i32
+```
+
 ---
 
 # Part 4: Transpilation Reference
@@ -916,8 +936,8 @@ lv_obj_t needle <- global.create_needle_img(this.scale);
 | `x +<- 1` | `x += 1` |
 | `void f(u32 x)` | `void f(uint32_t *x)` |
 | `f(myVar)` | `f(&myVar)` |
-| `scope S { void f() {} }` | `static void S_f(void) {}` |
-| `scope S { public void f() {} }` | `void S_f(void) {}` + header |
+| `scope S { private void f() {} }` | `static void S_f(void) {}` |
+| `scope S { void f() {} }` | `void S_f(void) {}` + header (public by default) |
 | `S.f()` | `S_f()` |
 | `u8[5] a <- [1,2,3,4,5]` | `uint8_t a[5] = {1,2,3,4,5}` |
 | `string<64> s <- "hi"` | `char s[65] = "hi"` |
@@ -936,3 +956,4 @@ lv_obj_t needle <- global.create_needle_img(this.scale);
 | Issue | Version | Status |
 |-------|---------|--------|
 | #967: Symbol cache cross-language conflict on scoped method names | v0.2.12 | FIXED (v0.2.15) |
+| #981: Macro-sized array field on local struct generates bit extraction instead of array index (`msg.data[3]` → `(msg.data >> 3) & 1`) | v0.2.15 | FIXED (v0.2.16) |

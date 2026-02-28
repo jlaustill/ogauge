@@ -81,10 +81,13 @@ C-Next `.cnx` files are auto-transpiled to `.cpp`/`.h` by `cnext_build.py` pre-b
 ## Firmware Layer Architecture
 
 ```
-display_st7701.cnx  — owns ST7701S panel + exposes draw_bitmap()
-touch_cst820.cnx    — owns CST820 touch + exposes read()/get_x()/get_y()
-lvgl_port.cnx       — thin LVGL glue (display/indev setup, callbacks)
-main.cnx            — orchestrator (init sequence, loop, demo/app content)
+display_st7701.cnx       — owns ST7701S panel + exposes draw_bitmap()
+touch_cst820.cnx         — owns CST820 touch + exposes read()/get_x()/get_y()
+lvgl_port.cnx            — thin LVGL glue (display/indev setup, callbacks)
+gauge_temp.cnx           — temperature gauge widget (LVGL scale + needle)
+needle_img.cnx           — needle image data + LVGL image descriptor
+data/twai_driver.cnx     — TWAI/CAN RX polling, J1939 decode, SPN extraction
+main.cnx                 — orchestrator (init sequence, loop, data→UI wiring)
 ```
 
 Each layer owns its hardware. Don't duplicate access across layers.
