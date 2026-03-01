@@ -8,7 +8,7 @@
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("OGauge: Needle gauge demo");
+  Serial.println("OGauge: Signal Catalog");
 
   Serial.println("I2C init...");
   I2C.init();
@@ -29,15 +29,14 @@ void setup() {
   Serial.println("Gauge init...");
   GaugeTemp.create();
 
-  Serial.println("TWAI init...");
-  TwaiDriver.init();
+  Serial.println("CAN init...");
+  CanBus.init();
 
   Serial.println("Ready!");
 }
 
 void loop() {
-  TwaiDriver.poll();
-  GaugeTemp.set_value(TwaiDriver.ambient_temp);
+  CanBus.poll();
   LvglPort.loop();
   delay(5);
 }
