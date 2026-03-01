@@ -1,0 +1,60 @@
+#include <driver/twai.h>
+#include <Arduino.h>
+#include "j1939_decoder.cnx"
+
+scope CanBus {
+  const gpio_num_t TX_PIN <- GPIO_NUM_19;
+  const gpio_num_t RX_PIN <- GPIO_NUM_20;
+
+  void init() {
+    twai_general_config_t g_config <- {
+      mode: TWAI_MODE_NORMAL,
+      tx_io: TX_PIN,
+      rx_io: RX_PIN,
+      clkout_io: TWAI_IO_UNUSED,
+      bus_off_io: TWAI_IO_UNUSED,
+      tx_queue_len: 0,
+      rx_queue_len: 32,
+      alerts_enabled: TWAI_ALERT_NONE,
+      clkout_divider: 0,
+      intr_flags: 0
+    };
+
+    twai_timing_config_t t_config <- {
+      brp: 16,
+      tseg_1: 15,
+      tseg_2: 4,
+      sjw: 3,
+      triple_sampling: false
+    };
+
+    twai_filter_config_t f_config <- {
+      acceptance_code: 0,
+      acceptance_mask: 0xFFFFFFFF,
+      single_filter: true
+    };
+
+    esp_err_t err <- global.twai_driver_install(g_config, t_config, f_config);
+    if (err != 0) {
+      global.Serial.println("CAN: driver install FAILED");
+      return;
+    }
+
+    err <- global.twai_start();
+    if (err != 0) {
+      global.Serial.println("CAN: start FAILED");
+      return;
+    }
+
+    global.Serial.println("CAN: started at 250kbps");
+  }
+
+  void poll() {
+    twai_message_t msg;
+    esp_err_t result <- global.twai_receive(msg, 0);
+    while (result = ESP_OK) {
+      J1939Decoder.on_frame(msg);
+      result <- global.twai_receive(msg, 0);
+    }
+  }
+}
