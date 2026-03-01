@@ -1,12 +1,12 @@
 #include <lvgl.h>
 #include "needle_img.cnx"
 #include "needle_img_boundary.h"
+#include "../data/signal_data.cnx"
 
 scope GaugeTemp {
   lv_obj_t scale;
   lv_obj_t needle;
   lv_obj_t temp_label;
-  lv_obj_t arc;
   lv_style_t blue_main;
   lv_style_t blue_ind;
   lv_style_t blue_items;
@@ -17,15 +17,22 @@ scope GaugeTemp {
   lv_style_t orange_ind;
   lv_style_t orange_items;
 
-  void set_value(i32 temp_c) {
-    global.lv_scale_set_image_needle_value(this.scale, this.needle, temp_c);
-    global.lv_label_set_text_fmt(this.temp_label, "%d C", temp_c);
+  void update() {
+    f32 temp_f <- SignalStore.current.ambient_temp_c.value;
+    u32 age <- global.millis() - SignalStore.current.ambient_temp_c.time;
+    i32 temp <- temp_f;
+
+    if (age > SIGNAL_STALE_MS) {
+      global.lv_label_set_text(this.temp_label, "---- C");
+      global.lv_scale_set_image_needle_value(this.scale, this.needle, -40);
+    } else {
+      global.lv_scale_set_image_needle_value(this.scale, this.needle, temp);
+      global.lv_label_set_text_fmt(this.temp_label, "%d C", temp);
+    }
   }
 
-  private void on_arc_changed(lv_event_t e) {
-    lv_obj_t target <- global.lv_event_get_target_obj(e);
-    i32 temp <- global.lv_arc_get_value(target);
-    this.set_value(temp);
+  private void on_update_timer(lv_timer_t t) {
+    this.update();
   }
 
   void create() {
@@ -119,24 +126,10 @@ scope GaugeTemp {
     global.lv_obj_set_style_text_font(this.temp_label, lv_font_montserrat_40, LV_PART_MAIN);
     global.lv_obj_set_style_text_color(this.temp_label, global.lv_color_hex(0xFFFFFF), LV_PART_MAIN);
 
-    // Invisible arc overlay for touch input (development testing)
-    this.arc <- global.lv_arc_create(scr);
-    global.lv_obj_set_size(this.arc, 420, 420);
-    global.lv_obj_center(this.arc);
-    global.lv_arc_set_range(this.arc, -40, 40);
-    global.lv_arc_set_value(this.arc, -40);
-    global.lv_arc_set_bg_angles(this.arc, 0, 270);
-    global.lv_arc_set_rotation(this.arc, 135);
-
-    // Make arc fully invisible (touch still works)
-    global.lv_obj_set_style_arc_opa(this.arc, LV_OPA_TRANSP, LV_PART_MAIN);
-    global.lv_obj_set_style_arc_opa(this.arc, LV_OPA_TRANSP, LV_PART_INDICATOR);
-    global.lv_obj_set_style_bg_opa(this.arc, LV_OPA_TRANSP, LV_PART_KNOB);
-
-    // Wire touch events
-    global.lv_obj_add_event_cb(this.arc, this.on_arc_changed, LV_EVENT_VALUE_CHANGED, 0);
-
     // Set initial needle position
     global.lv_scale_set_image_needle_value(this.scale, this.needle, -40);
+
+    // Self-update from SignalData at 10Hz
+    global.lv_timer_create(this.on_update_timer, 100, 0);
   }
 }
