@@ -1,0 +1,63 @@
+#include <driver/twai.h>
+#include <Arduino.h>
+#include <J1939Message.cnx>
+#include "signal_data.cnx"
+
+scope J1939Decoder {
+
+  private u16 extract_u16(u8[8] data, u8 byte_lo, u8 byte_hi) {
+    u16 raw <- 0;
+    raw[0, 8] <- data[byte_lo];
+    raw[8, 8] <- data[byte_hi];
+    return raw;
+  }
+
+  private void decode_65269(u8[8] data) {
+    // SPN 108 - Barometric Pressure: byte 0, 1 byte, 0.5 kPa/bit
+    u8 raw108 <- data[0];
+    SignalStore.current.barometric_pressure_kpa.value <- raw108 * 0.5;
+    SignalStore.current.barometric_pressure_kpa.time <- global.millis();
+
+    // SPN 171 - Ambient Air Temperature: bytes 3-4, 2 bytes, 0.03125 C/bit, -273 offset
+    u16 raw171 <- this.extract_u16(data, 3, 4);
+    i32 raw171_wide <- raw171[0, 16];
+    SignalStore.current.ambient_temp_c.value <- raw171_wide * 0.03125 - 273.0;
+    SignalStore.current.ambient_temp_c.time <- global.millis();
+  }
+
+  private void decode_65270(u8[8] data) {
+    // SPN 173 - Exhaust Gas Temperature: bytes 5-6, 2 bytes, 0.03125 C/bit, -273 offset
+    u16 raw173 <- this.extract_u16(data, 5, 6);
+    i32 raw173_wide <- raw173[0, 16];
+    SignalStore.current.egt_c.value <- raw173_wide * 0.03125 - 273.0;
+    SignalStore.current.egt_c.time <- global.millis();
+  }
+
+  private void decode_65263(u8[8] data) {
+    // SPN 94 - Fuel Delivery Pressure: byte 0, 1 byte, 4.0 kPa/bit
+    u8 raw94 <- data[0];
+    SignalStore.current.fuel_pressure_kpa.value <- raw94 * 4.0;
+    SignalStore.current.fuel_pressure_kpa.time <- global.millis();
+  }
+
+  private void decode_65164(u8[8] data) {
+    // SPN 354 - Relative Humidity: byte 6, 1 byte, 0.4 %/bit
+    u8 raw354 <- data[6];
+    SignalStore.current.relative_humidity_pct.value <- raw354 * 0.4;
+    SignalStore.current.relative_humidity_pct.time <- global.millis();
+  }
+
+  void on_frame(twai_message_t msg) {
+    J1939Message j_msg;
+    J1939.init(j_msg);
+    J1939.setCanId(j_msg, msg.identifier);
+    J1939.setData(j_msg, msg.data);
+
+    u16 pgn <- j_msg.pgn;
+
+    if (pgn = 65269) { this.decode_65269(msg.data); }
+    if (pgn = 65270) { this.decode_65270(msg.data); }
+    if (pgn = 65263) { this.decode_65263(msg.data); }
+    if (pgn = 65164) { this.decode_65164(msg.data); }
+  }
+}
