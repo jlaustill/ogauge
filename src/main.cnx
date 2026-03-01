@@ -1,10 +1,10 @@
 #include <Arduino.h>
 #include <lvgl.h>
-#include "display_st7701.cnx"
-#include "touch_cst820.cnx"
-#include "lvgl_port.cnx"
-#include "gauge_temp.cnx"
-#include "data/twai_driver.cnx"
+#include "display/display_st7701.cnx"
+#include "display/touch_cst820.cnx"
+#include "display/lvgl_port.cnx"
+#include "display/gauge_temp.cnx"
+#include "data/can_bus.cnx"
 
 void setup() {
   Serial.begin(115200);
