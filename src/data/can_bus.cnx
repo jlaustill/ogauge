@@ -1,5 +1,6 @@
 #include <driver/twai.h>
 #include <Arduino.h>
+#include <J1939Message.cnx>
 #include "j1939_decoder.cnx"
 
 scope CanBus {
@@ -53,7 +54,17 @@ scope CanBus {
     twai_message_t msg;
     esp_err_t result <- global.twai_receive(msg, 0);
     while (result = ESP_OK) {
-      J1939Decoder.on_frame(msg);
+      J1939Message j_msg;
+      J1939.init(j_msg);
+      J1939.setCanId(j_msg, msg.identifier);
+      J1939.setData(j_msg, msg.data);
+      u16 pgn <- j_msg.pgn;
+      global.Serial.printf("%08X#%02X%02X%02X%02X%02X%02X%02X%02X PGN=%d\n",
+          msg.identifier,
+          msg.data[0], msg.data[1], msg.data[2], msg.data[3],
+          msg.data[4], msg.data[5], msg.data[6], msg.data[7],
+          pgn);
+      J1939Decoder.decode(pgn, msg.data);
       result <- global.twai_receive(msg, 0);
     }
   }

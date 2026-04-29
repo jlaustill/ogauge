@@ -12,7 +12,10 @@ struct SignalData {
   Signal barometric_pressure_kpa;
   Signal relative_humidity_pct;
   Signal egt_c;
+  Signal oil_temp_c;
   Signal fuel_pressure_kpa;
+  Signal rpm;
+  Signal total_dist_km;
 }
 
 const u32 SIGNAL_STALE_MS <- 2000;

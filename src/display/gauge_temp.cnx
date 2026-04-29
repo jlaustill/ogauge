@@ -1,33 +1,60 @@
+#include <Arduino.h>
 #include <lvgl.h>
-#include "needle_img.cnx"
-#include "needle_img_boundary.h"
 #include "../data/signal_data.cnx"
 
 scope GaugeTemp {
-  lv_obj_t scale;
-  lv_obj_t needle;
-  lv_obj_t temp_label;
-  lv_style_t blue_main;
-  lv_style_t blue_ind;
-  lv_style_t blue_items;
-  lv_style_t green_main;
-  lv_style_t green_ind;
-  lv_style_t green_items;
-  lv_style_t orange_main;
-  lv_style_t orange_ind;
-  lv_style_t orange_items;
+  lv_obj_t egt_title;
+  lv_obj_t egt_val;
+  lv_obj_t oil_title;
+  lv_obj_t oil_val;
+  lv_obj_t fuel_title;
+  lv_obj_t fuel_val;
+  lv_obj_t rpm_title;
+  lv_obj_t rpm_val;
+  lv_obj_t odo_title;
+  lv_obj_t odo_val;
 
   void update() {
-    f32 temp_f <- SignalStore.current.ambient_temp_c.value;
-    u32 age <- global.millis() - SignalStore.current.ambient_temp_c.time;
-    i32 temp <- temp_f;
+    u32 now <- global.millis();
 
-    if (age > SIGNAL_STALE_MS) {
-      global.lv_label_set_text(this.temp_label, "---- C");
-      global.lv_scale_set_image_needle_value(this.scale, this.needle, -40);
+    u32 egt_age <- now - SignalStore.current.egt_c.time;
+    if (egt_age > SIGNAL_STALE_MS) {
+      global.lv_label_set_text(this.egt_val, "---- C");
     } else {
-      global.lv_scale_set_image_needle_value(this.scale, this.needle, temp);
-      global.lv_label_set_text_fmt(this.temp_label, "%d C", temp);
+      i32 egt <- SignalStore.current.egt_c.value;
+      global.lv_label_set_text_fmt(this.egt_val, "%d C", egt);
+    }
+
+    u32 oil_age <- now - SignalStore.current.oil_temp_c.time;
+    if (oil_age > SIGNAL_STALE_MS) {
+      global.lv_label_set_text(this.oil_val, "---- C");
+    } else {
+      i32 oil <- SignalStore.current.oil_temp_c.value;
+      global.lv_label_set_text_fmt(this.oil_val, "%d C", oil);
+    }
+
+    u32 fuel_age <- now - SignalStore.current.fuel_pressure_kpa.time;
+    if (fuel_age > SIGNAL_STALE_MS) {
+      global.lv_label_set_text(this.fuel_val, "---- kPa");
+    } else {
+      i32 fuel <- SignalStore.current.fuel_pressure_kpa.value;
+      global.lv_label_set_text_fmt(this.fuel_val, "%d kPa", fuel);
+    }
+
+    u32 rpm_age <- now - SignalStore.current.rpm.time;
+    if (rpm_age > SIGNAL_STALE_MS) {
+      global.lv_label_set_text(this.rpm_val, "---- RPM");
+    } else {
+      i32 rpm <- SignalStore.current.rpm.value;
+      global.lv_label_set_text_fmt(this.rpm_val, "%d RPM", rpm);
+    }
+
+    u32 odo_age <- now - SignalStore.current.total_dist_km.time;
+    if (odo_age > SIGNAL_STALE_MS) {
+      global.lv_label_set_text(this.odo_val, "---- mi");
+    } else {
+      i32 odo <- SignalStore.current.total_dist_km.value * 0.621371;
+      global.lv_label_set_text_fmt(this.odo_val, "%d mi", odo);
     }
   }
 
@@ -37,99 +64,73 @@ scope GaugeTemp {
 
   void create() {
     lv_obj_t scr <- global.lv_screen_active();
-
-    // Dark screen background
     global.lv_obj_set_style_bg_color(scr, global.lv_color_hex(0x1A1A2E), LV_PART_MAIN);
 
-    // Scale: 420x420, centered, 270-degree arc
-    this.scale <- global.lv_scale_create(scr);
-    global.lv_obj_set_size(this.scale, 420, 420);
-    global.lv_obj_center(this.scale);
-    global.lv_scale_set_mode(this.scale, LV_SCALE_MODE_ROUND_INNER);
-    global.lv_scale_set_range(this.scale, -40, 40);
-    global.lv_scale_set_angle_range(this.scale, 270);
-    global.lv_scale_set_rotation(this.scale, 135);
-    global.lv_scale_set_total_tick_count(this.scale, 17);
-    global.lv_scale_set_major_tick_every(this.scale, 2);
-    global.lv_scale_set_label_show(this.scale, true);
+    // EGT — orange, slot center offset -128
+    this.egt_title <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.egt_title, "EGT");
+    global.lv_obj_align(this.egt_title, LV_ALIGN_CENTER, 0, -142);
+    global.lv_obj_set_style_text_font(this.egt_title, lv_font_montserrat_14, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.egt_title, global.lv_color_hex(0xFF8C00), LV_PART_MAIN);
 
-    // Tick styling: length, width, color
-    global.lv_obj_set_style_length(this.scale, 12, LV_PART_ITEMS);
-    global.lv_obj_set_style_line_width(this.scale, 2, LV_PART_ITEMS);
-    global.lv_obj_set_style_line_color(this.scale, global.lv_color_hex(0xCCCCCC), LV_PART_ITEMS);
+    this.egt_val <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.egt_val, "---- C");
+    global.lv_obj_align(this.egt_val, LV_ALIGN_CENTER, 0, -116);
+    global.lv_obj_set_style_text_font(this.egt_val, lv_font_montserrat_32, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.egt_val, global.lv_color_hex(0xFF8C00), LV_PART_MAIN);
 
-    global.lv_obj_set_style_length(this.scale, 20, LV_PART_INDICATOR);
-    global.lv_obj_set_style_line_width(this.scale, 3, LV_PART_INDICATOR);
-    global.lv_obj_set_style_line_color(this.scale, global.lv_color_hex(0xFFFFFF), LV_PART_INDICATOR);
+    // OIL — blue, slot center offset -64
+    this.oil_title <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.oil_title, "OIL");
+    global.lv_obj_align(this.oil_title, LV_ALIGN_CENTER, 0, -78);
+    global.lv_obj_set_style_text_font(this.oil_title, lv_font_montserrat_14, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.oil_title, global.lv_color_hex(0x4488FF), LV_PART_MAIN);
 
-    // Scale labels: white, Montserrat 24
-    global.lv_obj_set_style_text_color(this.scale, global.lv_color_hex(0xFFFFFF), LV_PART_INDICATOR);
-    global.lv_obj_set_style_text_font(this.scale, lv_font_montserrat_24, LV_PART_INDICATOR);
+    this.oil_val <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.oil_val, "---- C");
+    global.lv_obj_align(this.oil_val, LV_ALIGN_CENTER, 0, -52);
+    global.lv_obj_set_style_text_font(this.oil_val, lv_font_montserrat_32, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.oil_val, global.lv_color_hex(0x4488FF), LV_PART_MAIN);
 
-    // Temperature zone: blue -40 to 0 (cold)
-    global.lv_style_init(this.blue_main);
-    global.lv_style_set_arc_color(this.blue_main, global.lv_color_hex(0x4488FF));
-    global.lv_style_set_arc_width(this.blue_main, 8);
-    global.lv_style_init(this.blue_ind);
-    global.lv_style_set_line_color(this.blue_ind, global.lv_color_hex(0x4488FF));
-    global.lv_style_init(this.blue_items);
-    global.lv_style_set_line_color(this.blue_items, global.lv_color_hex(0x4488FF));
+    // FUEL — green, slot center offset 0
+    this.fuel_title <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.fuel_title, "FUEL");
+    global.lv_obj_align(this.fuel_title, LV_ALIGN_CENTER, 0, -14);
+    global.lv_obj_set_style_text_font(this.fuel_title, lv_font_montserrat_14, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.fuel_title, global.lv_color_hex(0x44BB44), LV_PART_MAIN);
 
-    lv_scale_section_t blue_sec <- global.lv_scale_add_section(this.scale);
-    global.lv_scale_set_section_range(this.scale, blue_sec, -40, 0);
-    global.lv_scale_set_section_style_main(this.scale, blue_sec, this.blue_main);
-    global.lv_scale_set_section_style_indicator(this.scale, blue_sec, this.blue_ind);
-    global.lv_scale_set_section_style_items(this.scale, blue_sec, this.blue_items);
+    this.fuel_val <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.fuel_val, "---- kPa");
+    global.lv_obj_align(this.fuel_val, LV_ALIGN_CENTER, 0, 12);
+    global.lv_obj_set_style_text_font(this.fuel_val, lv_font_montserrat_32, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.fuel_val, global.lv_color_hex(0x44BB44), LV_PART_MAIN);
 
-    // Temperature zone: green 0 to 30 (normal)
-    global.lv_style_init(this.green_main);
-    global.lv_style_set_arc_color(this.green_main, global.lv_color_hex(0x44BB44));
-    global.lv_style_set_arc_width(this.green_main, 8);
-    global.lv_style_init(this.green_ind);
-    global.lv_style_set_line_color(this.green_ind, global.lv_color_hex(0x44BB44));
-    global.lv_style_init(this.green_items);
-    global.lv_style_set_line_color(this.green_items, global.lv_color_hex(0x44BB44));
+    // RPM — white, slot center offset +64
+    this.rpm_title <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.rpm_title, "RPM");
+    global.lv_obj_align(this.rpm_title, LV_ALIGN_CENTER, 0, 50);
+    global.lv_obj_set_style_text_font(this.rpm_title, lv_font_montserrat_14, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.rpm_title, global.lv_color_hex(0xFFFFFF), LV_PART_MAIN);
 
-    lv_scale_section_t green_sec <- global.lv_scale_add_section(this.scale);
-    global.lv_scale_set_section_range(this.scale, green_sec, 0, 30);
-    global.lv_scale_set_section_style_main(this.scale, green_sec, this.green_main);
-    global.lv_scale_set_section_style_indicator(this.scale, green_sec, this.green_ind);
-    global.lv_scale_set_section_style_items(this.scale, green_sec, this.green_items);
+    this.rpm_val <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.rpm_val, "---- RPM");
+    global.lv_obj_align(this.rpm_val, LV_ALIGN_CENTER, 0, 76);
+    global.lv_obj_set_style_text_font(this.rpm_val, lv_font_montserrat_32, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.rpm_val, global.lv_color_hex(0xFFFFFF), LV_PART_MAIN);
 
-    // Temperature zone: orange 30 to 40 (hot)
-    global.lv_style_init(this.orange_main);
-    global.lv_style_set_arc_color(this.orange_main, global.lv_color_hex(0xFF8C00));
-    global.lv_style_set_arc_width(this.orange_main, 8);
-    global.lv_style_init(this.orange_ind);
-    global.lv_style_set_line_color(this.orange_ind, global.lv_color_hex(0xFF8C00));
-    global.lv_style_init(this.orange_items);
-    global.lv_style_set_line_color(this.orange_items, global.lv_color_hex(0xFF8C00));
+    // ODO — gray, slot center offset +128
+    this.odo_title <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.odo_title, "ODO");
+    global.lv_obj_align(this.odo_title, LV_ALIGN_CENTER, 0, 114);
+    global.lv_obj_set_style_text_font(this.odo_title, lv_font_montserrat_14, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.odo_title, global.lv_color_hex(0xAAAAAA), LV_PART_MAIN);
 
-    lv_scale_section_t orange_sec <- global.lv_scale_add_section(this.scale);
-    global.lv_scale_set_section_range(this.scale, orange_sec, 30, 40);
-    global.lv_scale_set_section_style_main(this.scale, orange_sec, this.orange_main);
-    global.lv_scale_set_section_style_indicator(this.scale, orange_sec, this.orange_ind);
-    global.lv_scale_set_section_style_items(this.scale, orange_sec, this.orange_items);
+    this.odo_val <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.odo_val, "---- mi");
+    global.lv_obj_align(this.odo_val, LV_ALIGN_CENTER, 0, 140);
+    global.lv_obj_set_style_text_font(this.odo_val, lv_font_montserrat_32, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.odo_val, global.lv_color_hex(0xAAAAAA), LV_PART_MAIN);
 
-    // Background: dark circle
-    global.lv_obj_set_style_bg_opa(this.scale, LV_OPA_COVER, LV_PART_MAIN);
-    global.lv_obj_set_style_bg_color(this.scale, global.lv_color_hex(0x1A1A2E), LV_PART_MAIN);
-    global.lv_obj_set_style_radius(this.scale, LV_RADIUS_CIRCLE, LV_PART_MAIN);
-
-    // Image needle: child of scale (needle_img.h is ADR-061 C boundary for void*)
-    this.needle <- global.lvgl_helper_create_needle_img(this.scale);
-
-    // Center temperature label
-    this.temp_label <- global.lv_label_create(scr);
-    global.lv_label_set_text_fmt(this.temp_label, "%d C", -40);
-    global.lv_obj_align(this.temp_label, LV_ALIGN_CENTER, 0, 120);
-    global.lv_obj_set_style_text_font(this.temp_label, lv_font_montserrat_40, LV_PART_MAIN);
-    global.lv_obj_set_style_text_color(this.temp_label, global.lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-
-    // Set initial needle position
-    global.lv_scale_set_image_needle_value(this.scale, this.needle, -40);
-
-    // Self-update from SignalData at 10Hz
     global.lv_timer_create(this.on_update_timer, 100, 0);
   }
 }

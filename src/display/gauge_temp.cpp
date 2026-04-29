@@ -3,117 +3,121 @@
  * A safer C for embedded systems
  */
 
-#include "gauge_temp.hpp"
+#include "display/gauge_temp.hpp"
 
+#include <Arduino.h>
 #include <lvgl.h>
-#include "needle_img.hpp"
-#include "needle_img_boundary.h"
+#include "../data/signal_data.hpp"
 
 #include <stdint.h>
-#include <stdbool.h>
 
 /* Scope: GaugeTemp */
-static lv_obj_t* GaugeTemp_scale = NULL;
-static lv_obj_t* GaugeTemp_needle = NULL;
-static lv_obj_t* GaugeTemp_temp_label = NULL;
-static lv_obj_t* GaugeTemp_arc = NULL;
-static lv_style_t GaugeTemp_blue_main = {0};
-static lv_style_t GaugeTemp_blue_ind = {0};
-static lv_style_t GaugeTemp_blue_items = {0};
-static lv_style_t GaugeTemp_green_main = {0};
-static lv_style_t GaugeTemp_green_ind = {0};
-static lv_style_t GaugeTemp_green_items = {0};
-static lv_style_t GaugeTemp_orange_main = {0};
-static lv_style_t GaugeTemp_orange_ind = {0};
-static lv_style_t GaugeTemp_orange_items = {0};
+static lv_obj_t* GaugeTemp_egt_title = NULL;
+static lv_obj_t* GaugeTemp_egt_val = NULL;
+static lv_obj_t* GaugeTemp_oil_title = NULL;
+static lv_obj_t* GaugeTemp_oil_val = NULL;
+static lv_obj_t* GaugeTemp_fuel_title = NULL;
+static lv_obj_t* GaugeTemp_fuel_val = NULL;
+static lv_obj_t* GaugeTemp_rpm_title = NULL;
+static lv_obj_t* GaugeTemp_rpm_val = NULL;
+static lv_obj_t* GaugeTemp_odo_title = NULL;
+static lv_obj_t* GaugeTemp_odo_val = NULL;
 
-void GaugeTemp_set_value(int32_t temp_c) {
-    lv_scale_set_image_needle_value(GaugeTemp_scale, GaugeTemp_needle, temp_c);
-    lv_label_set_text_fmt(GaugeTemp_temp_label, "%d C", temp_c);
+void GaugeTemp_update(void) {
+    uint32_t now = millis();
+    uint32_t egt_age = now - SignalStore_current.egt_c.time;
+    if (egt_age > SIGNAL_STALE_MS) {
+        lv_label_set_text(GaugeTemp_egt_val, "---- C");
+    } else {
+        int32_t egt = SignalStore_current.egt_c.value;
+        lv_label_set_text_fmt(GaugeTemp_egt_val, "%d C", egt);
+    }
+    uint32_t oil_age = now - SignalStore_current.oil_temp_c.time;
+    if (oil_age > SIGNAL_STALE_MS) {
+        lv_label_set_text(GaugeTemp_oil_val, "---- C");
+    } else {
+        int32_t oil = SignalStore_current.oil_temp_c.value;
+        lv_label_set_text_fmt(GaugeTemp_oil_val, "%d C", oil);
+    }
+    uint32_t fuel_age = now - SignalStore_current.fuel_pressure_kpa.time;
+    if (fuel_age > SIGNAL_STALE_MS) {
+        lv_label_set_text(GaugeTemp_fuel_val, "---- kPa");
+    } else {
+        int32_t fuel = SignalStore_current.fuel_pressure_kpa.value;
+        lv_label_set_text_fmt(GaugeTemp_fuel_val, "%d kPa", fuel);
+    }
+    uint32_t rpm_age = now - SignalStore_current.rpm.time;
+    if (rpm_age > SIGNAL_STALE_MS) {
+        lv_label_set_text(GaugeTemp_rpm_val, "---- RPM");
+    } else {
+        int32_t rpm = SignalStore_current.rpm.value;
+        lv_label_set_text_fmt(GaugeTemp_rpm_val, "%d RPM", rpm);
+    }
+    uint32_t odo_age = now - SignalStore_current.total_dist_km.time;
+    if (odo_age > SIGNAL_STALE_MS) {
+        lv_label_set_text(GaugeTemp_odo_val, "---- mi");
+    } else {
+        int32_t odo = SignalStore_current.total_dist_km.value * 0.621371;
+        lv_label_set_text_fmt(GaugeTemp_odo_val, "%d mi", odo);
+    }
 }
 
-static void GaugeTemp_on_arc_changed(lv_event_t* e) {
-    lv_obj_t* target = lv_event_get_target_obj(e);
-    int32_t temp = lv_arc_get_value(target);
-    GaugeTemp_set_value(temp);
+static void GaugeTemp_on_update_timer(lv_timer_t* t) {
+    GaugeTemp_update();
 }
 
 void GaugeTemp_create(void) {
     lv_obj_t* scr = lv_screen_active();
     lv_obj_set_style_bg_color(scr, lv_color_hex(0x1A1A2E), LV_PART_MAIN);
-    GaugeTemp_scale = lv_scale_create(scr);
-    lv_obj_set_size(GaugeTemp_scale, 420, 420);
-    lv_obj_center(GaugeTemp_scale);
-    lv_scale_set_mode(GaugeTemp_scale, LV_SCALE_MODE_ROUND_INNER);
-    lv_scale_set_range(GaugeTemp_scale, -40, 40);
-    lv_scale_set_angle_range(GaugeTemp_scale, 270);
-    lv_scale_set_rotation(GaugeTemp_scale, 135);
-    lv_scale_set_total_tick_count(GaugeTemp_scale, 17);
-    lv_scale_set_major_tick_every(GaugeTemp_scale, 2);
-    lv_scale_set_label_show(GaugeTemp_scale, true);
-    lv_obj_set_style_length(GaugeTemp_scale, 12, LV_PART_ITEMS);
-    lv_obj_set_style_line_width(GaugeTemp_scale, 2, LV_PART_ITEMS);
-    lv_obj_set_style_line_color(GaugeTemp_scale, lv_color_hex(0xCCCCCC), LV_PART_ITEMS);
-    lv_obj_set_style_length(GaugeTemp_scale, 20, LV_PART_INDICATOR);
-    lv_obj_set_style_line_width(GaugeTemp_scale, 3, LV_PART_INDICATOR);
-    lv_obj_set_style_line_color(GaugeTemp_scale, lv_color_hex(0xFFFFFF), LV_PART_INDICATOR);
-    lv_obj_set_style_text_color(GaugeTemp_scale, lv_color_hex(0xFFFFFF), LV_PART_INDICATOR);
-    lv_obj_set_style_text_font(GaugeTemp_scale, &lv_font_montserrat_24, LV_PART_INDICATOR);
-    lv_style_init(&GaugeTemp_blue_main);
-    lv_style_set_arc_color(&GaugeTemp_blue_main, lv_color_hex(0x4488FF));
-    lv_style_set_arc_width(&GaugeTemp_blue_main, 8);
-    lv_style_init(&GaugeTemp_blue_ind);
-    lv_style_set_line_color(&GaugeTemp_blue_ind, lv_color_hex(0x4488FF));
-    lv_style_init(&GaugeTemp_blue_items);
-    lv_style_set_line_color(&GaugeTemp_blue_items, lv_color_hex(0x4488FF));
-    lv_scale_section_t* blue_sec = lv_scale_add_section(GaugeTemp_scale);
-    lv_scale_set_section_range(GaugeTemp_scale, blue_sec, -40, 0);
-    lv_scale_set_section_style_main(GaugeTemp_scale, blue_sec, &GaugeTemp_blue_main);
-    lv_scale_set_section_style_indicator(GaugeTemp_scale, blue_sec, &GaugeTemp_blue_ind);
-    lv_scale_set_section_style_items(GaugeTemp_scale, blue_sec, &GaugeTemp_blue_items);
-    lv_style_init(&GaugeTemp_green_main);
-    lv_style_set_arc_color(&GaugeTemp_green_main, lv_color_hex(0x44BB44));
-    lv_style_set_arc_width(&GaugeTemp_green_main, 8);
-    lv_style_init(&GaugeTemp_green_ind);
-    lv_style_set_line_color(&GaugeTemp_green_ind, lv_color_hex(0x44BB44));
-    lv_style_init(&GaugeTemp_green_items);
-    lv_style_set_line_color(&GaugeTemp_green_items, lv_color_hex(0x44BB44));
-    lv_scale_section_t* green_sec = lv_scale_add_section(GaugeTemp_scale);
-    lv_scale_set_section_range(GaugeTemp_scale, green_sec, 0, 30);
-    lv_scale_set_section_style_main(GaugeTemp_scale, green_sec, &GaugeTemp_green_main);
-    lv_scale_set_section_style_indicator(GaugeTemp_scale, green_sec, &GaugeTemp_green_ind);
-    lv_scale_set_section_style_items(GaugeTemp_scale, green_sec, &GaugeTemp_green_items);
-    lv_style_init(&GaugeTemp_orange_main);
-    lv_style_set_arc_color(&GaugeTemp_orange_main, lv_color_hex(0xFF8C00));
-    lv_style_set_arc_width(&GaugeTemp_orange_main, 8);
-    lv_style_init(&GaugeTemp_orange_ind);
-    lv_style_set_line_color(&GaugeTemp_orange_ind, lv_color_hex(0xFF8C00));
-    lv_style_init(&GaugeTemp_orange_items);
-    lv_style_set_line_color(&GaugeTemp_orange_items, lv_color_hex(0xFF8C00));
-    lv_scale_section_t* orange_sec = lv_scale_add_section(GaugeTemp_scale);
-    lv_scale_set_section_range(GaugeTemp_scale, orange_sec, 30, 40);
-    lv_scale_set_section_style_main(GaugeTemp_scale, orange_sec, &GaugeTemp_orange_main);
-    lv_scale_set_section_style_indicator(GaugeTemp_scale, orange_sec, &GaugeTemp_orange_ind);
-    lv_scale_set_section_style_items(GaugeTemp_scale, orange_sec, &GaugeTemp_orange_items);
-    lv_obj_set_style_bg_opa(GaugeTemp_scale, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_bg_color(GaugeTemp_scale, lv_color_hex(0x1A1A2E), LV_PART_MAIN);
-    lv_obj_set_style_radius(GaugeTemp_scale, LV_RADIUS_CIRCLE, LV_PART_MAIN);
-    GaugeTemp_needle = lvgl_helper_create_needle_img(GaugeTemp_scale);
-    GaugeTemp_temp_label = lv_label_create(scr);
-    lv_label_set_text_fmt(GaugeTemp_temp_label, "%d C", -40);
-    lv_obj_align(GaugeTemp_temp_label, LV_ALIGN_CENTER, 0, 120);
-    lv_obj_set_style_text_font(GaugeTemp_temp_label, &lv_font_montserrat_40, LV_PART_MAIN);
-    lv_obj_set_style_text_color(GaugeTemp_temp_label, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
-    GaugeTemp_arc = lv_arc_create(scr);
-    lv_obj_set_size(GaugeTemp_arc, 420, 420);
-    lv_obj_center(GaugeTemp_arc);
-    lv_arc_set_range(GaugeTemp_arc, -40, 40);
-    lv_arc_set_value(GaugeTemp_arc, -40);
-    lv_arc_set_bg_angles(GaugeTemp_arc, 0, 270);
-    lv_arc_set_rotation(GaugeTemp_arc, 135);
-    lv_obj_set_style_arc_opa(GaugeTemp_arc, LV_OPA_TRANSP, LV_PART_MAIN);
-    lv_obj_set_style_arc_opa(GaugeTemp_arc, LV_OPA_TRANSP, LV_PART_INDICATOR);
-    lv_obj_set_style_bg_opa(GaugeTemp_arc, LV_OPA_TRANSP, LV_PART_KNOB);
-    lv_obj_add_event_cb(GaugeTemp_arc, GaugeTemp_on_arc_changed, LV_EVENT_VALUE_CHANGED, 0);
-    lv_scale_set_image_needle_value(GaugeTemp_scale, GaugeTemp_needle, -40);
+    GaugeTemp_egt_title = lv_label_create(scr);
+    lv_label_set_text(GaugeTemp_egt_title, "EGT");
+    lv_obj_align(GaugeTemp_egt_title, LV_ALIGN_CENTER, 0, -142);
+    lv_obj_set_style_text_font(GaugeTemp_egt_title, &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTemp_egt_title, lv_color_hex(0xFF8C00), LV_PART_MAIN);
+    GaugeTemp_egt_val = lv_label_create(scr);
+    lv_label_set_text(GaugeTemp_egt_val, "---- C");
+    lv_obj_align(GaugeTemp_egt_val, LV_ALIGN_CENTER, 0, -116);
+    lv_obj_set_style_text_font(GaugeTemp_egt_val, &lv_font_montserrat_32, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTemp_egt_val, lv_color_hex(0xFF8C00), LV_PART_MAIN);
+    GaugeTemp_oil_title = lv_label_create(scr);
+    lv_label_set_text(GaugeTemp_oil_title, "OIL");
+    lv_obj_align(GaugeTemp_oil_title, LV_ALIGN_CENTER, 0, -78);
+    lv_obj_set_style_text_font(GaugeTemp_oil_title, &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTemp_oil_title, lv_color_hex(0x4488FF), LV_PART_MAIN);
+    GaugeTemp_oil_val = lv_label_create(scr);
+    lv_label_set_text(GaugeTemp_oil_val, "---- C");
+    lv_obj_align(GaugeTemp_oil_val, LV_ALIGN_CENTER, 0, -52);
+    lv_obj_set_style_text_font(GaugeTemp_oil_val, &lv_font_montserrat_32, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTemp_oil_val, lv_color_hex(0x4488FF), LV_PART_MAIN);
+    GaugeTemp_fuel_title = lv_label_create(scr);
+    lv_label_set_text(GaugeTemp_fuel_title, "FUEL");
+    lv_obj_align(GaugeTemp_fuel_title, LV_ALIGN_CENTER, 0, -14);
+    lv_obj_set_style_text_font(GaugeTemp_fuel_title, &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTemp_fuel_title, lv_color_hex(0x44BB44), LV_PART_MAIN);
+    GaugeTemp_fuel_val = lv_label_create(scr);
+    lv_label_set_text(GaugeTemp_fuel_val, "---- kPa");
+    lv_obj_align(GaugeTemp_fuel_val, LV_ALIGN_CENTER, 0, 12);
+    lv_obj_set_style_text_font(GaugeTemp_fuel_val, &lv_font_montserrat_32, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTemp_fuel_val, lv_color_hex(0x44BB44), LV_PART_MAIN);
+    GaugeTemp_rpm_title = lv_label_create(scr);
+    lv_label_set_text(GaugeTemp_rpm_title, "RPM");
+    lv_obj_align(GaugeTemp_rpm_title, LV_ALIGN_CENTER, 0, 50);
+    lv_obj_set_style_text_font(GaugeTemp_rpm_title, &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTemp_rpm_title, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+    GaugeTemp_rpm_val = lv_label_create(scr);
+    lv_label_set_text(GaugeTemp_rpm_val, "---- RPM");
+    lv_obj_align(GaugeTemp_rpm_val, LV_ALIGN_CENTER, 0, 76);
+    lv_obj_set_style_text_font(GaugeTemp_rpm_val, &lv_font_montserrat_32, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTemp_rpm_val, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+    GaugeTemp_odo_title = lv_label_create(scr);
+    lv_label_set_text(GaugeTemp_odo_title, "ODO");
+    lv_obj_align(GaugeTemp_odo_title, LV_ALIGN_CENTER, 0, 114);
+    lv_obj_set_style_text_font(GaugeTemp_odo_title, &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTemp_odo_title, lv_color_hex(0xAAAAAA), LV_PART_MAIN);
+    GaugeTemp_odo_val = lv_label_create(scr);
+    lv_label_set_text(GaugeTemp_odo_val, "---- mi");
+    lv_obj_align(GaugeTemp_odo_val, LV_ALIGN_CENTER, 0, 140);
+    lv_obj_set_style_text_font(GaugeTemp_odo_val, &lv_font_montserrat_32, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTemp_odo_val, lv_color_hex(0xAAAAAA), LV_PART_MAIN);
+    lv_timer_create(GaugeTemp_on_update_timer, 100, 0);
 }

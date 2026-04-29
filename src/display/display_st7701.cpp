@@ -3,7 +3,7 @@
  * A safer C for embedded systems
  */
 
-#include "display_st7701.hpp"
+#include "display/display_st7701.hpp"
 
 #include "tca9554.hpp"
 #include <Arduino.h>
