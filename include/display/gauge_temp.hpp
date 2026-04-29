@@ -8,14 +8,14 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "needle_img.hpp"
+#include "../data/signal_data.hpp"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /* Function prototypes */
-void GaugeTemp_set_value(int32_t temp_c);
+void GaugeTemp_update(void);
 void GaugeTemp_create(void);
 
 #ifdef __cplusplus

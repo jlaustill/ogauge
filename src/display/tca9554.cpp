@@ -3,7 +3,7 @@
  * A safer C for embedded systems
  */
 
-#include "tca9554.hpp"
+#include "display/tca9554.hpp"
 
 #include "i2c_driver.hpp"
 

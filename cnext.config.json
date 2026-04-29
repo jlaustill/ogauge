@@ -5,6 +5,7 @@
   "headerOut": "include",
   "include": [
     "include/",
+    "include/display",
     ".pio/libdeps/waveshare_lcd_21/J1939/src",
     "/home/linux/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/driver/include",
     "/home/linux/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/include/esp_lcd/include",

@@ -3,7 +3,7 @@
  * A safer C for embedded systems
  */
 
-#include "i2c_driver.hpp"
+#include "display/i2c_driver.hpp"
 
 #include <Wire.h>
 

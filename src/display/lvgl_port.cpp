@@ -3,7 +3,7 @@
  * A safer C for embedded systems
  */
 
-#include "lvgl_port.hpp"
+#include "display/lvgl_port.hpp"
 
 #include "display_st7701.hpp"
 #include "touch_cst820.hpp"

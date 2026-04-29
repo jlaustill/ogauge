@@ -3,7 +3,7 @@
  * A safer C for embedded systems
  */
 
-#include "needle_img.hpp"
+#include "display/needle_img.hpp"
 
 #include <lvgl.h>
 

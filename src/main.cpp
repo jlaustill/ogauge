@@ -5,15 +5,15 @@
 
 #include <Arduino.h>
 #include <lvgl.h>
-#include "display_st7701.hpp"
-#include "touch_cst820.hpp"
-#include "lvgl_port.hpp"
-#include "gauge_temp.hpp"
-#include "data/twai_driver.hpp"
+#include "display/display_st7701.hpp"
+#include "display/touch_cst820.hpp"
+#include "display/lvgl_port.hpp"
+#include "display/gauge_temp.hpp"
+#include "data/can_bus.hpp"
 
 void setup(void) {
     Serial.begin(115200);
-    Serial.println("OGauge: Needle gauge demo");
+    Serial.println("OGauge: Signal Catalog");
     Serial.println("I2C init...");
     I2C_init();
     Serial.println("TCA9554 init...");
@@ -27,14 +27,13 @@ void setup(void) {
     LvglPort_init();
     Serial.println("Gauge init...");
     GaugeTemp_create();
-    Serial.println("TWAI init...");
-    TwaiDriver_init();
+    Serial.println("CAN init...");
+    CanBus_init();
     Serial.println("Ready!");
 }
 
 void loop(void) {
-    TwaiDriver_poll();
-    GaugeTemp_set_value(TwaiDriver_ambient_temp);
+    CanBus_poll();
     LvglPort_loop();
     delay(5);
 }

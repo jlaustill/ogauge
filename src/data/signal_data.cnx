@@ -1,0 +1,25 @@
+// Signal value + timestamp pair
+// Written by J1939 decoder, read by display widgets
+struct Signal {
+  f32 value;
+  u32 time;
+}
+
+// All known signal values in native J1939 units
+// Unit conversion (kPa→PSI, C→F) happens at display time
+struct SignalData {
+  Signal ambient_temp_c;
+  Signal barometric_pressure_kpa;
+  Signal relative_humidity_pct;
+  Signal egt_c;
+  Signal oil_temp_c;
+  Signal fuel_pressure_kpa;
+  Signal rpm;
+  Signal total_dist_km;
+}
+
+const u32 SIGNAL_STALE_MS <- 2000;
+
+scope SignalStore {
+  public SignalData current;
+}
