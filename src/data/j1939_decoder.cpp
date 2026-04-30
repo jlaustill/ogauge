@@ -41,9 +41,7 @@ static void J1939Decoder_decode_65269(const uint8_t data[8]) {
 static void J1939Decoder_decode_65270(const uint8_t data[8]) {
     uint16_t raw173 = J1939Decoder_extract_u16(data, 4U, 5U);
     int32_t raw173_wide = ((raw173) & 0xFFFFU);
-    float egt = raw173_wide * 0.03125 - 273.0;
-    Serial.printf("EGT decode: bytes[4]=%02X bytes[5]=%02X raw=%d egt=%d C\n", data[4], data[5], raw173_wide, egt);
-    SignalStore_current.egt_c.value = egt;
+    SignalStore_current.egt_c.value = raw173_wide * 0.03125 - 273.0;
     SignalStore_current.egt_c.time = millis();
 }
 
