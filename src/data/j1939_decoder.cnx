@@ -33,10 +33,13 @@ scope J1939Decoder {
   }
 
   private void decode_65270(u8[8] data) {
-    // SPN 173 - Exhaust Gas Temperature: bytes 5-6, 2 bytes, 0.03125 C/bit, -273 offset
-    u16 raw173 <- this.extract_u16(data, 5, 6);
+    // SPN 173 - Exhaust Gas Temperature: bytes 4-5, 2 bytes, 0.03125 C/bit, -273 offset
+    u16 raw173 <- this.extract_u16(data, 4, 5);
     i32 raw173_wide <- raw173[0, 16];
-    SignalStore.current.egt_c.value <- raw173_wide * 0.03125 - 273.0;
+    f32 egt <- raw173_wide * 0.03125 - 273.0;
+    global.Serial.printf("EGT decode: bytes[4]=%02X bytes[5]=%02X raw=%d egt=%d C\n",
+        data[4], data[5], raw173_wide, egt);
+    SignalStore.current.egt_c.value <- egt;
     SignalStore.current.egt_c.time <- global.millis();
   }
 
