@@ -4,6 +4,13 @@
 
 scope GaugeTrans {
   lv_obj_t gear_val;
+  lv_obj_t temp_title;
+  lv_obj_t temp_val;
+  lv_obj_t tow_chip;
+  lv_obj_t svc_chip;
+  lv_obj_t warn_chip;
+  private u8 flash_ctr <- 0;     // 100ms ticks, drives the error-state flash
+  private bool flash_on <- false;
 
   // Convert a raw J1939 gear byte (offset -125) to a single display character.
   // Verified on the truck: 0x7C=-1 (reverse), 0x7D=0 (neutral), 0x7E=+1 (1st),
@@ -38,8 +45,67 @@ scope GaugeTrans {
     return result;
   }
 
+  // 2-bit Status -> lit?  0 off / 3 N-A -> dim, 1 on -> lit, 2 error -> flashing.
+  // Pure integer logic (no lv_obj_t param — C-Next marks handle params const).
+  private bool chip_lit(u8 state) {
+    bool lit <- false;
+    if (state = 1) { lit <- true; }
+    if (state = 2) { lit <- this.flash_on; }
+    return lit;
+  }
+
   void update() {
     u32 now <- global.millis();
+
+    // Flash timebase: ~500ms period at the 100ms timer (on for 3 ticks of 5).
+    this.flash_ctr +<- 1;
+    if (this.flash_ctr >= 5) { this.flash_ctr <- 0; }
+    this.flash_on <- false;
+    if (this.flash_ctr < 3) { this.flash_on <- true; }
+
+    u32 temp_age <- now - SignalStore.current.trans_temp_c.time;
+    if (temp_age > SIGNAL_STALE_MS) {
+      global.lv_label_set_text(this.temp_val, "---- C");
+    } else {
+      i32 t <- SignalStore.current.trans_temp_c.value;
+      global.lv_label_set_text_fmt(this.temp_val, "%d C", t);
+    }
+
+    // Telltale chips (inlined per field — proven pattern; arrays/handle-params
+    // hit C-Next codegen bugs).
+    bool tow_lit <- this.chip_lit(SignalStore.current.tow_haul.state);
+    if (tow_lit) {
+      global.lv_obj_set_style_text_color(this.tow_chip, global.lv_color_hex(0x4488FF), LV_PART_MAIN);
+      global.lv_obj_set_style_border_color(this.tow_chip, global.lv_color_hex(0x4488FF), LV_PART_MAIN);
+      global.lv_obj_set_style_border_opa(this.tow_chip, 255, LV_PART_MAIN);
+    } else {
+      global.lv_obj_set_style_text_color(this.tow_chip, global.lv_color_hex(0x444444), LV_PART_MAIN);
+      global.lv_obj_set_style_border_color(this.tow_chip, global.lv_color_hex(0x444444), LV_PART_MAIN);
+      global.lv_obj_set_style_border_opa(this.tow_chip, 60, LV_PART_MAIN);
+    }
+
+    bool svc_lit <- this.chip_lit(SignalStore.current.trans_service.state);
+    if (svc_lit) {
+      global.lv_obj_set_style_text_color(this.svc_chip, global.lv_color_hex(0xFFAA00), LV_PART_MAIN);
+      global.lv_obj_set_style_border_color(this.svc_chip, global.lv_color_hex(0xFFAA00), LV_PART_MAIN);
+      global.lv_obj_set_style_border_opa(this.svc_chip, 255, LV_PART_MAIN);
+    } else {
+      global.lv_obj_set_style_text_color(this.svc_chip, global.lv_color_hex(0x444444), LV_PART_MAIN);
+      global.lv_obj_set_style_border_color(this.svc_chip, global.lv_color_hex(0x444444), LV_PART_MAIN);
+      global.lv_obj_set_style_border_opa(this.svc_chip, 60, LV_PART_MAIN);
+    }
+
+    bool warn_lit <- this.chip_lit(SignalStore.current.trans_warning.state);
+    if (warn_lit) {
+      global.lv_obj_set_style_text_color(this.warn_chip, global.lv_color_hex(0xFF3333), LV_PART_MAIN);
+      global.lv_obj_set_style_border_color(this.warn_chip, global.lv_color_hex(0xFF3333), LV_PART_MAIN);
+      global.lv_obj_set_style_border_opa(this.warn_chip, 255, LV_PART_MAIN);
+    } else {
+      global.lv_obj_set_style_text_color(this.warn_chip, global.lv_color_hex(0x444444), LV_PART_MAIN);
+      global.lv_obj_set_style_border_color(this.warn_chip, global.lv_color_hex(0x444444), LV_PART_MAIN);
+      global.lv_obj_set_style_border_opa(this.warn_chip, 60, LV_PART_MAIN);
+    }
+
     u32 age <- now - SignalStore.current.gear.time;
     if (age > SIGNAL_STALE_MS) {
       global.lv_label_set_text(this.gear_val, "-  -  -");
@@ -63,6 +129,54 @@ scope GaugeTrans {
     global.lv_obj_align(this.gear_val, LV_ALIGN_CENTER, 0, 180);
     global.lv_obj_set_style_text_font(this.gear_val, lv_font_montserrat_40, LV_PART_MAIN);
     global.lv_obj_set_style_text_color(this.gear_val, global.lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+
+    // Trans oil temp — left edge, labeled value.
+    this.temp_title <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.temp_title, "TRANS");
+    global.lv_obj_align(this.temp_title, LV_ALIGN_LEFT_MID, 10, -12);
+    global.lv_obj_set_style_text_font(this.temp_title, lv_font_montserrat_14, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.temp_title, global.lv_color_hex(0x66CCFF), LV_PART_MAIN);
+
+    this.temp_val <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.temp_val, "---- C");
+    global.lv_obj_align(this.temp_val, LV_ALIGN_LEFT_MID, 10, 10);
+    global.lv_obj_set_style_text_font(this.temp_val, lv_font_montserrat_14, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.temp_val, global.lv_color_hex(0x66CCFF), LV_PART_MAIN);
+
+    // Telltale chips — TOW / SVC / WARN row across the top (base styling
+    // inlined per field; dim by default, lit each frame by update()).
+    this.tow_chip <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.tow_chip, "TOW");
+    global.lv_obj_align(this.tow_chip, LV_ALIGN_TOP_MID, -78, 40);
+    global.lv_obj_set_style_text_font(this.tow_chip, lv_font_montserrat_14, LV_PART_MAIN);
+    global.lv_obj_set_style_border_width(this.tow_chip, 2, LV_PART_MAIN);
+    global.lv_obj_set_style_radius(this.tow_chip, 4, LV_PART_MAIN);
+    global.lv_obj_set_style_pad_all(this.tow_chip, 3, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.tow_chip, global.lv_color_hex(0x444444), LV_PART_MAIN);
+    global.lv_obj_set_style_border_color(this.tow_chip, global.lv_color_hex(0x444444), LV_PART_MAIN);
+    global.lv_obj_set_style_border_opa(this.tow_chip, 60, LV_PART_MAIN);
+
+    this.svc_chip <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.svc_chip, "SVC");
+    global.lv_obj_align(this.svc_chip, LV_ALIGN_TOP_MID, -18, 40);
+    global.lv_obj_set_style_text_font(this.svc_chip, lv_font_montserrat_14, LV_PART_MAIN);
+    global.lv_obj_set_style_border_width(this.svc_chip, 2, LV_PART_MAIN);
+    global.lv_obj_set_style_radius(this.svc_chip, 4, LV_PART_MAIN);
+    global.lv_obj_set_style_pad_all(this.svc_chip, 3, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.svc_chip, global.lv_color_hex(0x444444), LV_PART_MAIN);
+    global.lv_obj_set_style_border_color(this.svc_chip, global.lv_color_hex(0x444444), LV_PART_MAIN);
+    global.lv_obj_set_style_border_opa(this.svc_chip, 60, LV_PART_MAIN);
+
+    this.warn_chip <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.warn_chip, "WARN");
+    global.lv_obj_align(this.warn_chip, LV_ALIGN_TOP_MID, 48, 40);
+    global.lv_obj_set_style_text_font(this.warn_chip, lv_font_montserrat_14, LV_PART_MAIN);
+    global.lv_obj_set_style_border_width(this.warn_chip, 2, LV_PART_MAIN);
+    global.lv_obj_set_style_radius(this.warn_chip, 4, LV_PART_MAIN);
+    global.lv_obj_set_style_pad_all(this.warn_chip, 3, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.warn_chip, global.lv_color_hex(0x444444), LV_PART_MAIN);
+    global.lv_obj_set_style_border_color(this.warn_chip, global.lv_color_hex(0x444444), LV_PART_MAIN);
+    global.lv_obj_set_style_border_opa(this.warn_chip, 60, LV_PART_MAIN);
 
     global.lv_timer_create(this.on_update_timer, 100, 0);
   }

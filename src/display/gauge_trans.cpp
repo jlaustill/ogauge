@@ -10,9 +10,27 @@
 #include "../data/signal_data.hpp"
 
 #include <stdint.h>
+#include <stdbool.h>
+
+// ADR-044: Overflow helper functions
+#include <limits.h>
+
+static inline uint8_t cnx_clamp_add_u8(uint8_t a, uint32_t b) {
+    if (b > (uint32_t)(UINT8_MAX - a)) return UINT8_MAX;
+    uint8_t result;
+    if (__builtin_add_overflow(a, (uint8_t)b, &result)) return UINT8_MAX;
+    return result;
+}
 
 /* Scope: GaugeTrans */
 static lv_obj_t* GaugeTrans_gear_val = NULL;
+static lv_obj_t* GaugeTrans_temp_title = NULL;
+static lv_obj_t* GaugeTrans_temp_val = NULL;
+static lv_obj_t* GaugeTrans_tow_chip = NULL;
+static lv_obj_t* GaugeTrans_svc_chip = NULL;
+static lv_obj_t* GaugeTrans_warn_chip = NULL;
+static uint8_t GaugeTrans_flash_ctr = 0;
+static bool GaugeTrans_flash_on = false;
 
 static uint8_t GaugeTrans_gear_char(uint8_t raw) {
     uint8_t result = static_cast<uint8_t>('0');
@@ -47,8 +65,64 @@ static uint8_t GaugeTrans_lever_char(uint8_t raw) {
     return result;
 }
 
+static bool GaugeTrans_chip_lit(uint8_t state) {
+    bool lit = false;
+    if (state == 1) {
+        lit = true;
+    }
+    if (state == 2) {
+        lit = GaugeTrans_flash_on;
+    }
+    return lit;
+}
+
 void GaugeTrans_update(void) {
     uint32_t now = millis();
+    GaugeTrans_flash_ctr = cnx_clamp_add_u8(GaugeTrans_flash_ctr, 1U);
+    if (GaugeTrans_flash_ctr >= 5) {
+        GaugeTrans_flash_ctr = 0U;
+    }
+    GaugeTrans_flash_on = false;
+    if (GaugeTrans_flash_ctr < 3) {
+        GaugeTrans_flash_on = true;
+    }
+    uint32_t temp_age = now - SignalStore_current.trans_temp_c.time;
+    if (temp_age > SIGNAL_STALE_MS) {
+        lv_label_set_text(GaugeTrans_temp_val, "---- C");
+    } else {
+        int32_t t = SignalStore_current.trans_temp_c.value;
+        lv_label_set_text_fmt(GaugeTrans_temp_val, "%d C", t);
+    }
+    bool tow_lit = GaugeTrans_chip_lit(SignalStore_current.tow_haul.state);
+    if (tow_lit) {
+        lv_obj_set_style_text_color(GaugeTrans_tow_chip, lv_color_hex(0x4488FF), LV_PART_MAIN);
+        lv_obj_set_style_border_color(GaugeTrans_tow_chip, lv_color_hex(0x4488FF), LV_PART_MAIN);
+        lv_obj_set_style_border_opa(GaugeTrans_tow_chip, 255U, LV_PART_MAIN);
+    } else {
+        lv_obj_set_style_text_color(GaugeTrans_tow_chip, lv_color_hex(0x444444), LV_PART_MAIN);
+        lv_obj_set_style_border_color(GaugeTrans_tow_chip, lv_color_hex(0x444444), LV_PART_MAIN);
+        lv_obj_set_style_border_opa(GaugeTrans_tow_chip, 60U, LV_PART_MAIN);
+    }
+    bool svc_lit = GaugeTrans_chip_lit(SignalStore_current.trans_service.state);
+    if (svc_lit) {
+        lv_obj_set_style_text_color(GaugeTrans_svc_chip, lv_color_hex(0xFFAA00), LV_PART_MAIN);
+        lv_obj_set_style_border_color(GaugeTrans_svc_chip, lv_color_hex(0xFFAA00), LV_PART_MAIN);
+        lv_obj_set_style_border_opa(GaugeTrans_svc_chip, 255U, LV_PART_MAIN);
+    } else {
+        lv_obj_set_style_text_color(GaugeTrans_svc_chip, lv_color_hex(0x444444), LV_PART_MAIN);
+        lv_obj_set_style_border_color(GaugeTrans_svc_chip, lv_color_hex(0x444444), LV_PART_MAIN);
+        lv_obj_set_style_border_opa(GaugeTrans_svc_chip, 60U, LV_PART_MAIN);
+    }
+    bool warn_lit = GaugeTrans_chip_lit(SignalStore_current.trans_warning.state);
+    if (warn_lit) {
+        lv_obj_set_style_text_color(GaugeTrans_warn_chip, lv_color_hex(0xFF3333), LV_PART_MAIN);
+        lv_obj_set_style_border_color(GaugeTrans_warn_chip, lv_color_hex(0xFF3333), LV_PART_MAIN);
+        lv_obj_set_style_border_opa(GaugeTrans_warn_chip, 255U, LV_PART_MAIN);
+    } else {
+        lv_obj_set_style_text_color(GaugeTrans_warn_chip, lv_color_hex(0x444444), LV_PART_MAIN);
+        lv_obj_set_style_border_color(GaugeTrans_warn_chip, lv_color_hex(0x444444), LV_PART_MAIN);
+        lv_obj_set_style_border_opa(GaugeTrans_warn_chip, 60U, LV_PART_MAIN);
+    }
     uint32_t age = now - SignalStore_current.gear.time;
     if (age > SIGNAL_STALE_MS) {
         lv_label_set_text(GaugeTrans_gear_val, "-  -  -");
@@ -71,5 +145,45 @@ void GaugeTrans_create(void) {
     lv_obj_align(GaugeTrans_gear_val, LV_ALIGN_CENTER, 0, 180);
     lv_obj_set_style_text_font(GaugeTrans_gear_val, &lv_font_montserrat_40, LV_PART_MAIN);
     lv_obj_set_style_text_color(GaugeTrans_gear_val, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+    GaugeTrans_temp_title = lv_label_create(scr);
+    lv_label_set_text(GaugeTrans_temp_title, "TRANS");
+    lv_obj_align(GaugeTrans_temp_title, LV_ALIGN_LEFT_MID, 10, -12);
+    lv_obj_set_style_text_font(GaugeTrans_temp_title, &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTrans_temp_title, lv_color_hex(0x66CCFF), LV_PART_MAIN);
+    GaugeTrans_temp_val = lv_label_create(scr);
+    lv_label_set_text(GaugeTrans_temp_val, "---- C");
+    lv_obj_align(GaugeTrans_temp_val, LV_ALIGN_LEFT_MID, 10, 10);
+    lv_obj_set_style_text_font(GaugeTrans_temp_val, &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTrans_temp_val, lv_color_hex(0x66CCFF), LV_PART_MAIN);
+    GaugeTrans_tow_chip = lv_label_create(scr);
+    lv_label_set_text(GaugeTrans_tow_chip, "TOW");
+    lv_obj_align(GaugeTrans_tow_chip, LV_ALIGN_TOP_MID, -78, 40);
+    lv_obj_set_style_text_font(GaugeTrans_tow_chip, &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_set_style_border_width(GaugeTrans_tow_chip, 2, LV_PART_MAIN);
+    lv_obj_set_style_radius(GaugeTrans_tow_chip, 4, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(GaugeTrans_tow_chip, 3, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTrans_tow_chip, lv_color_hex(0x444444), LV_PART_MAIN);
+    lv_obj_set_style_border_color(GaugeTrans_tow_chip, lv_color_hex(0x444444), LV_PART_MAIN);
+    lv_obj_set_style_border_opa(GaugeTrans_tow_chip, 60U, LV_PART_MAIN);
+    GaugeTrans_svc_chip = lv_label_create(scr);
+    lv_label_set_text(GaugeTrans_svc_chip, "SVC");
+    lv_obj_align(GaugeTrans_svc_chip, LV_ALIGN_TOP_MID, -18, 40);
+    lv_obj_set_style_text_font(GaugeTrans_svc_chip, &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_set_style_border_width(GaugeTrans_svc_chip, 2, LV_PART_MAIN);
+    lv_obj_set_style_radius(GaugeTrans_svc_chip, 4, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(GaugeTrans_svc_chip, 3, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTrans_svc_chip, lv_color_hex(0x444444), LV_PART_MAIN);
+    lv_obj_set_style_border_color(GaugeTrans_svc_chip, lv_color_hex(0x444444), LV_PART_MAIN);
+    lv_obj_set_style_border_opa(GaugeTrans_svc_chip, 60U, LV_PART_MAIN);
+    GaugeTrans_warn_chip = lv_label_create(scr);
+    lv_label_set_text(GaugeTrans_warn_chip, "WARN");
+    lv_obj_align(GaugeTrans_warn_chip, LV_ALIGN_TOP_MID, 48, 40);
+    lv_obj_set_style_text_font(GaugeTrans_warn_chip, &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_set_style_border_width(GaugeTrans_warn_chip, 2, LV_PART_MAIN);
+    lv_obj_set_style_radius(GaugeTrans_warn_chip, 4, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(GaugeTrans_warn_chip, 3, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTrans_warn_chip, lv_color_hex(0x444444), LV_PART_MAIN);
+    lv_obj_set_style_border_color(GaugeTrans_warn_chip, lv_color_hex(0x444444), LV_PART_MAIN);
+    lv_obj_set_style_border_opa(GaugeTrans_warn_chip, 60U, LV_PART_MAIN);
     lv_timer_create(GaugeTrans_on_update_timer, 100, 0);
 }
