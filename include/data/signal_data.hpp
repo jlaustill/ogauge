@@ -18,6 +18,12 @@ typedef struct Signal {
     float value;
     uint32_t time;
 } Signal;
+typedef struct GearState {
+    uint8_t lever;
+    uint8_t demanded;
+    uint8_t actual;
+    uint32_t time;
+} GearState;
 typedef struct SignalData {
     Signal ambient_temp_c;
     Signal barometric_pressure_kpa;
@@ -27,6 +33,7 @@ typedef struct SignalData {
     Signal fuel_pressure_kpa;
     Signal rpm;
     Signal total_dist_km;
+    GearState gear;
 } SignalData;
 
 /* External variables */

@@ -3,6 +3,13 @@
 
 scope J1939Decoder {
 
+  // Source addresses — which module owns which signals on this bus.
+  // The TCM (SA_TCM) re-broadcasts overlapping PGNs (oil temp, RPM, ...);
+  // gating each PGN to its expected SA stops it from clobbering real data.
+  const u8 SA_ECM <- 0;     // Engine ECM: RPM, odometer
+  const u8 SA_SENSOR <- 1;  // OSSM sensor module: EGT, oil, fuel, ambient, humidity
+  const u8 SA_TCM <- 3;     // Transmission control module (not yet decoded)
+
   private u16 extract_u16(u8[8] data, u8 byte_lo, u8 byte_hi) {
     u16 raw <- 0;
     raw[0, 8] <- data[byte_lo];
@@ -80,13 +87,41 @@ scope J1939Decoder {
     }
   }
 
-  void decode(u16 pgn, u8[8] data) {
-    if (pgn = 61444) { this.decode_61444(data); }
-    if (pgn = 65248) { this.decode_65248(data); }
-    if (pgn = 65269) { this.decode_65269(data); }
-    if (pgn = 65270) { this.decode_65270(data); }
-    if (pgn = 65263) { this.decode_65263(data); }
-    if (pgn = 65164) { this.decode_65164(data); }
-    if (pgn = 65262) { this.decode_65262(data); }
+  private void decode_61445(u8[8] data) {
+    // PGN 61445 ETC2: lever = Requested Range char [4] (SPN 162),
+    // demanded = Selected Gear [0] (SPN 524), actual = Current Gear [3] (SPN 523).
+    // Gears are raw bytes (offset -125); the UI converts to characters.
+    u8 lv <- data[4];
+    u8 dm <- data[0];
+    u8 ac <- data[3];
+    bool changed <- false;
+    if (lv != SignalStore.current.gear.lever)    { changed <- true; }
+    if (dm != SignalStore.current.gear.demanded) { changed <- true; }
+    if (ac != SignalStore.current.gear.actual)   { changed <- true; }
+    SignalStore.current.gear.lever    <- lv;
+    SignalStore.current.gear.demanded <- dm;
+    SignalStore.current.gear.actual   <- ac;
+    SignalStore.current.gear.time     <- global.millis();
+    // Change-triggered only — a per-frame printf in the RX drain loop starves
+    // the UI (see ui-starvation lesson). This prints once per lever/gear change.
+    if (changed) {
+      global.Serial.printf("GEAR: lever=%c(0x%02X) dmd=0x%02X cur=0x%02X\n", lv, lv, dm, ac);
+    }
+  }
+
+  void decode(u16 pgn, u8 sa, u8[8] data) {
+    // Gate each PGN to its expected source address so the TCM (SA_TCM)
+    // can't clobber engine/sensor data with its overlapping re-broadcasts.
+    // SA_ECM (0) — engine ECM
+    if (pgn = 61444 && sa = SA_ECM) { this.decode_61444(data); }
+    if (pgn = 65248 && sa = SA_ECM) { this.decode_65248(data); }
+    // SA_SENSOR (1) — OSSM sensor module
+    if (pgn = 65270 && sa = SA_SENSOR) { this.decode_65270(data); }
+    if (pgn = 65262 && sa = SA_SENSOR) { this.decode_65262(data); }
+    if (pgn = 65263 && sa = SA_SENSOR) { this.decode_65263(data); }
+    if (pgn = 65269 && sa = SA_SENSOR) { this.decode_65269(data); }
+    if (pgn = 65164 && sa = SA_SENSOR) { this.decode_65164(data); }
+    // SA_TCM (3) — transmission control module
+    if (pgn = 61445 && sa = SA_TCM) { this.decode_61445(data); }
   }
 }

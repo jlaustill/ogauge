@@ -9,6 +9,9 @@
 
 // Signal value + timestamp pair
 // Written by J1939 decoder, read by display widgets
+// ETC2 gear state — three raw bytes from PGN 61445 (SA 3 / TCM).
+// Display renders each via GaugeTrans.gear_char/lever_char; kept raw here so
+// all character logic lives in one place (the UI), not split into the decoder.
 // All known signal values in native J1939 units
 // Unit conversion (kPa→PSI, C→F) happens at display time
 extern const uint32_t SIGNAL_STALE_MS = 2000U;

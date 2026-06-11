@@ -15,7 +15,7 @@ extern "C" {
 #endif
 
 /* Function prototypes */
-void J1939Decoder_decode(uint16_t pgn, const uint8_t data[8]);
+void J1939Decoder_decode(uint16_t pgn, uint8_t sa, const uint8_t data[8]);
 
 #ifdef __cplusplus
 }

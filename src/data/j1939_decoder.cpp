@@ -9,6 +9,7 @@
 #include "signal_data.hpp"
 
 #include <stdint.h>
+#include <stdbool.h>
 
 /* Scope: J1939Decoder */
 
@@ -79,26 +80,52 @@ static void J1939Decoder_decode_65248(const uint8_t data[8]) {
     }
 }
 
-void J1939Decoder_decode(uint16_t pgn, const uint8_t data[8]) {
-    if (pgn == 61444) {
+static void J1939Decoder_decode_61445(const uint8_t data[8]) {
+    uint8_t lv = data[4];
+    uint8_t dm = data[0];
+    uint8_t ac = data[3];
+    bool changed = false;
+    if (lv != SignalStore_current.gear.lever) {
+        changed = true;
+    }
+    if (dm != SignalStore_current.gear.demanded) {
+        changed = true;
+    }
+    if (ac != SignalStore_current.gear.actual) {
+        changed = true;
+    }
+    SignalStore_current.gear.lever = lv;
+    SignalStore_current.gear.demanded = dm;
+    SignalStore_current.gear.actual = ac;
+    SignalStore_current.gear.time = millis();
+    if (changed) {
+        Serial.printf("GEAR: lever=%c(0x%02X) dmd=0x%02X cur=0x%02X\n", lv, lv, dm, ac);
+    }
+}
+
+void J1939Decoder_decode(uint16_t pgn, uint8_t sa, const uint8_t data[8]) {
+    if (pgn == 61444 && sa == 0) {
         J1939Decoder_decode_61444(data);
     }
-    if (pgn == 65248) {
+    if (pgn == 65248 && sa == 0) {
         J1939Decoder_decode_65248(data);
     }
-    if (pgn == 65269) {
-        J1939Decoder_decode_65269(data);
-    }
-    if (pgn == 65270) {
+    if (pgn == 65270 && sa == 1) {
         J1939Decoder_decode_65270(data);
     }
-    if (pgn == 65263) {
+    if (pgn == 65262 && sa == 1) {
+        J1939Decoder_decode_65262(data);
+    }
+    if (pgn == 65263 && sa == 1) {
         J1939Decoder_decode_65263(data);
     }
-    if (pgn == 65164) {
+    if (pgn == 65269 && sa == 1) {
+        J1939Decoder_decode_65269(data);
+    }
+    if (pgn == 65164 && sa == 1) {
         J1939Decoder_decode_65164(data);
     }
-    if (pgn == 65262) {
-        J1939Decoder_decode_65262(data);
+    if (pgn == 61445 && sa == 3) {
+        J1939Decoder_decode_61445(data);
     }
 }

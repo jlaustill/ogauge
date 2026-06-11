@@ -41,8 +41,7 @@ void CanBus_poll(void) {
         J1939_setCanId(j_msg, msg.identifier);
         J1939_setData(j_msg, msg.data);
         uint16_t pgn = j_msg.pgn;
-        Serial.printf("%08X#%02X%02X%02X%02X%02X%02X%02X%02X PGN=%d\n", msg.identifier, msg.data[0], msg.data[1], msg.data[2], msg.data[3], msg.data[4], msg.data[5], msg.data[6], msg.data[7], pgn);
-        J1939Decoder_decode(pgn, msg.data);
+        J1939Decoder_decode(pgn, j_msg.sourceAddress, msg.data);
         result = twai_receive(&msg, 0);
     }
 }
