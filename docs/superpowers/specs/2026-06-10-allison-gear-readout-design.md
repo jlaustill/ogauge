@@ -110,7 +110,8 @@ private void decode_61445(u8[8] data) {
 ```
 
 **Display — `src/display/gauge_trans.cnx` (new scope)**
-- One large label, bottom-center, montserrat_32 (or larger), styled like the engine values.
+- One large label, bottom-center, **montserrat_40** (larger than the engine values' 32;
+  already enabled in `lv_conf.h`, no config change needed), styled like the engine values.
 - Private `gear_char(u8 raw) -> u8` helper implementing the table above; a sibling
   `lever_char(u8 raw) -> u8` for the printable-or-`'-'` rule.
 - 100 ms update timer (own `lv_timer_create`, same pattern as `GaugeTemp`): reads
@@ -137,6 +138,7 @@ during shifts.
 ## Out of Scope (YAGNI)
 
 - Column labels (LVR/DMD/ACT) — bare three chars per the chosen layout.
+- Fonts larger than montserrat_40 (would need enabling in `lv_conf.h`).
 - Multi-char ranges (D1/D2/R2…) and the cal-specific 2nd byte of the range field.
 - Reverse-gear magnitude (all reverse renders `R`).
 - Actual Gear Ratio (SPN 526) and any other ETC2 field.
