@@ -4,6 +4,7 @@
 #include "display/touch_cst820.cnx"
 #include "display/lvgl_port.cnx"
 #include "display/gauge_temp.cnx"
+#include "display/gauge_trans.cnx"
 #include "data/can_bus.cnx"
 
 void setup() {
@@ -28,6 +29,9 @@ void setup() {
 
   Serial.println("Gauge init...");
   GaugeTemp.create();
+
+  Serial.println("Gear readout init...");
+  GaugeTrans.create();
 
   Serial.println("CAN init...");
   CanBus.init();

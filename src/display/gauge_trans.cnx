@@ -1,0 +1,69 @@
+#include <Arduino.h>
+#include <lvgl.h>
+#include "../data/signal_data.cnx"
+
+scope GaugeTrans {
+  lv_obj_t gear_val;
+
+  // Convert a raw J1939 gear byte (offset -125) to a single display character.
+  // Verified on the truck: 0x7C=-1 (reverse), 0x7D=0 (neutral), 0x7E=+1 (1st),
+  // climbing 0x7F/0x80/0x81 = 2nd/3rd/4th. Park sends 0xFB (out of gear range)
+  // which must read as no-gear '0' (P 0 0). 0xFF/0xFE = not available/error -> '-'.
+  private u8 gear_char(u8 raw) {
+    u8 result <- '0';              // default: no gear / park / neutral
+    if (raw = 0xFF) { result <- '-'; }
+    if (raw = 0xFE) { result <- '-'; }
+    if (raw < 0xFE) {
+      i32 g <- raw[0, 8];
+      g <- g - 125;
+      if (g >= 1 && g <= 9) {      // forward gear -> digit
+        i32 cv <- 48 + g;
+        result <- cv[0, 8];
+      }
+      if (g <= -1 && g >= -9) {    // reverse -> 'R'
+        result <- 'R';
+      }
+      // g == 0 (neutral) or |g| > 9 (park 0xFB) fall through as '0'
+    }
+    return result;
+  }
+
+  // Lever char is ASCII from Requested Range. This Allison reports the Drive
+  // detent as '6' (top range) -> show as 'D'; P/R/N and limited ranges 5..2
+  // pass through; space/control -> '-'.
+  private u8 lever_char(u8 raw) {
+    u8 result <- raw;
+    if (raw <= 0x20) { result <- '-'; }
+    if (raw = 0x36) { result <- 'D'; }
+    return result;
+  }
+
+  void update() {
+    u32 now <- global.millis();
+    u32 age <- now - SignalStore.current.gear.time;
+    if (age > SIGNAL_STALE_MS) {
+      global.lv_label_set_text(this.gear_val, "-  -  -");
+    } else {
+      u8 lv <- this.lever_char(SignalStore.current.gear.lever);
+      u8 dm <- this.gear_char(SignalStore.current.gear.demanded);
+      u8 ac <- this.gear_char(SignalStore.current.gear.actual);
+      global.lv_label_set_text_fmt(this.gear_val, "%c  %c  %c", lv, dm, ac);
+    }
+  }
+
+  private void on_update_timer(lv_timer_t t) {
+    this.update();
+  }
+
+  void create() {
+    lv_obj_t scr <- global.lv_screen_active();
+
+    this.gear_val <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.gear_val, "-  -  -");
+    global.lv_obj_align(this.gear_val, LV_ALIGN_CENTER, 0, 180);
+    global.lv_obj_set_style_text_font(this.gear_val, lv_font_montserrat_40, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.gear_val, global.lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+
+    global.lv_timer_create(this.on_update_timer, 100, 0);
+  }
+}
