@@ -7,6 +7,13 @@ scope CanBus {
   const gpio_num_t TX_PIN <- GPIO_NUM_19;
   const gpio_num_t RX_PIN <- GPIO_NUM_20;
 
+  // J1939 Request (PGN 59904) addressed to the TCM (SA 3), our source 0xF9.
+  // Data = requested PGN 65272 (0xFEF8) little-endian + 0xFF padding.
+  // NOTE: this is OGauge's only CAN transmission — a benign data request,
+  // not a control action. Fired ~1Hz to solicit TRF1 (trans oil temp).
+  const u32 REQUEST_TEMP_ID <- 0x18EA03F9;
+  private u32 last_req_ms <- 0;
+
   void init() {
     twai_general_config_t g_config <- {
       mode: TWAI_MODE_NORMAL,
@@ -14,7 +21,7 @@ scope CanBus {
       rx_io: RX_PIN,
       clkout_io: TWAI_IO_UNUSED,
       bus_off_io: TWAI_IO_UNUSED,
-      tx_queue_len: 0,
+      tx_queue_len: 5,
       rx_queue_len: 32,
       alerts_enabled: TWAI_ALERT_NONE,
       clkout_divider: 0,
@@ -50,7 +57,33 @@ scope CanBus {
     global.Serial.println("CAN: started at 250kbps");
   }
 
+  private void send_temp_request() {
+    twai_message_t req;
+    req.flags <- 1;                 // extd: 29-bit extended frame
+    req.identifier <- REQUEST_TEMP_ID;
+    req.data_length_code <- 8;
+    req.data[0] <- 0xF8;            // PGN 65272 low byte
+    req.data[1] <- 0xFE;            // PGN 65272 high byte
+    req.data[2] <- 0x00;
+    req.data[3] <- 0xFF;
+    req.data[4] <- 0xFF;
+    req.data[5] <- 0xFF;
+    req.data[6] <- 0xFF;
+    req.data[7] <- 0xFF;
+    esp_err_t err <- global.twai_transmit(req, 0);
+    if (err != 0) {
+      global.Serial.println("CAN TX: temp request failed");
+    }
+  }
+
   void poll() {
+    u32 now <- global.millis();
+    u32 since_req <- now - this.last_req_ms;
+    if (since_req >= 1000) {
+      this.send_temp_request();
+      this.last_req_ms <- now;
+    }
+
     twai_message_t msg;
     esp_err_t result <- global.twai_receive(msg, 0);
     while (result = ESP_OK) {

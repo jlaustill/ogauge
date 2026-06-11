@@ -103,6 +103,48 @@ static void J1939Decoder_decode_61445(const uint8_t data[8]) {
     }
 }
 
+static void J1939Decoder_decode_65272(const uint8_t data[8]) {
+    uint16_t raw177 = J1939Decoder_extract_u16(data, 4U, 5U);
+    int32_t raw177_wide = ((raw177) & 0xFFFFU);
+    float temp = raw177_wide * 0.03125 - 273.0;
+    int32_t prev_i = SignalStore_current.trans_temp_c.value;
+    int32_t new_i = static_cast<int32_t>(temp);
+    SignalStore_current.trans_temp_c.value = temp;
+    SignalStore_current.trans_temp_c.time = millis();
+    if (new_i != prev_i) {
+        Serial.printf("TRANS TEMP: %d C (raw=%d)\n", new_i, raw177_wide);
+    }
+}
+
+static void J1939Decoder_decode_65098(const uint8_t data[8]) {
+    uint8_t b_tow = data[2];
+    uint8_t b_svc = data[0];
+    uint8_t b_warn = data[5];
+    uint8_t tow = static_cast<uint8_t>(((b_tow >> 4) & ((1U << 2) - 1)));
+    uint8_t svc = static_cast<uint8_t>(((b_svc >> 2) & ((1U << 2) - 1)));
+    uint8_t warn = static_cast<uint8_t>(((b_warn >> 2) & ((1U << 2) - 1)));
+    bool changed = false;
+    if (tow != SignalStore_current.tow_haul.state) {
+        changed = true;
+    }
+    if (svc != SignalStore_current.trans_service.state) {
+        changed = true;
+    }
+    if (warn != SignalStore_current.trans_warning.state) {
+        changed = true;
+    }
+    uint32_t now = millis();
+    SignalStore_current.tow_haul.state = tow;
+    SignalStore_current.tow_haul.time = now;
+    SignalStore_current.trans_service.state = svc;
+    SignalStore_current.trans_service.time = now;
+    SignalStore_current.trans_warning.state = warn;
+    SignalStore_current.trans_warning.time = now;
+    if (changed) {
+        Serial.printf("ETC7: tow=%d svc=%d warn=%d (b3=0x%02X b1=0x%02X b6=0x%02X)\n", tow, svc, warn, b_tow, b_svc, b_warn);
+    }
+}
+
 void J1939Decoder_decode(uint16_t pgn, uint8_t sa, const uint8_t data[8]) {
     if (pgn == 61444 && sa == 0) {
         J1939Decoder_decode_61444(data);
@@ -127,5 +169,11 @@ void J1939Decoder_decode(uint16_t pgn, uint8_t sa, const uint8_t data[8]) {
     }
     if (pgn == 61445 && sa == 3) {
         J1939Decoder_decode_61445(data);
+    }
+    if (pgn == 65272 && sa == 3) {
+        J1939Decoder_decode_65272(data);
+    }
+    if (pgn == 65098 && sa == 3) {
+        J1939Decoder_decode_65098(data);
     }
 }

@@ -24,6 +24,10 @@ typedef struct GearState {
     uint8_t actual;
     uint32_t time;
 } GearState;
+typedef struct Status {
+    uint8_t state;
+    uint32_t time;
+} Status;
 typedef struct SignalData {
     Signal ambient_temp_c;
     Signal barometric_pressure_kpa;
@@ -34,6 +38,10 @@ typedef struct SignalData {
     Signal rpm;
     Signal total_dist_km;
     GearState gear;
+    Signal trans_temp_c;
+    Status tow_haul;
+    Status trans_service;
+    Status trans_warning;
 } SignalData;
 
 /* External variables */

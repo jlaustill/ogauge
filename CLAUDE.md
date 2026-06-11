@@ -30,7 +30,7 @@ J1939 Decoder    OBD-II ISO-TP
 
 - **CAN-only** - no analog inputs, ever
 - **Single CAN interface** - one TWAI controller, one bitrate at a time
-- **Read-only** - no control actions sent via CAN
+- **Read-only** - no control actions sent via CAN. J1939 data Requests (PGN 59904) are permitted (e.g. soliciting trans oil temp / PGN 65272 from the TCM); these ask a node to broadcast data and are not control actions.
 - **Opinionated layouts** - value_count (1/2/4/6/8/12) + layout_id, no free-form editing
 - **Open signal definitions** - J1939 SPNs/PGNs and OBD-II PIDs from open repos only, no proprietary sources
 
