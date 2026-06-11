@@ -24,7 +24,7 @@ J1939 Decoder    OBD-II ISO-TP
         UI (LVGL)
 ```
 
-**Hard rule:** UI never blocks CAN RX or OBD polling. CAN/comms and UI run on separate threads.
+**Goal (not yet reality):** UI never blocks CAN RX. Today `main.cnx` runs `CanBus.poll()` then `LvglPort.loop()` sequentially in one thread — the LVGL update timer (all display refresh) only runs *after* `poll()` returns.
 
 ## Hard Constraints
 
@@ -85,18 +85,30 @@ display_st7701.cnx       — owns ST7701S panel + exposes draw_bitmap()
 touch_cst820.cnx         — owns CST820 touch + exposes read()/get_x()/get_y()
 lvgl_port.cnx            — thin LVGL glue (display/indev setup, callbacks)
 gauge_temp.cnx           — temperature gauge widget (LVGL scale + needle)
+gauge_trans.cnx          — transmission panel (gear readout, trans temp, telltale chips)
 needle_img.cnx           — needle image data + LVGL image descriptor
-data/twai_driver.cnx     — TWAI/CAN RX polling, J1939 decode, SPN extraction
+data/can_bus.cnx         — TWAI init + RX drain (poll) + J1939 Request TX
+data/j1939_decoder.cnx   — SA-gated PGN dispatch + SPN decode → SignalStore
+data/signal_data.cnx     — SignalStore (decoded values + timestamps)
 main.cnx                 — orchestrator (init sequence, loop, data→UI wiring)
 ```
 
 Each layer owns its hardware. Don't duplicate access across layers.
+
+## Gotchas (hard-won)
+
+- **No per-frame `Serial.printf` in the CAN RX drain loop** — at 250kbps it's slower than frame arrival, so `poll()`'s `while` never exits and the UI freezes at all-`----`. Log change-triggered only.
+- **LVGL + C-Next: never pass `lv_obj_t` as a function param or store handles in an array** (bugs #995/#996 — generates `const`/bad codegen). Use individual scope fields + inline the `lv_obj_*` styling, like `gauge_temp.cnx`.
+- **Serial capture: use pyserial with `setDTR(False)/setRTS(False)`**, not `stty`+`cat` (the latter glitches the ESP32 reset line → empty/garbled reads). Truck must be running for SA 3 (TCM) data.
+- **C-Next arrays: `u8[3] arr` (not `u8 arr[3]`); the subscript index must be unsigned** (`u8`/`u32`, not `i32`).
+- **J1939 PGN/SPN lookup**: `mongod` is often down — fall back to the JSON at `/home/linux/code/j1939-ref/j1939_data.json` (query with `jq`).
 
 ## C-Next Bug Reports
 
 Repro directory: `/tmp/cnext-bugs/<issue-number>-<slug>/`
 Required files: `fake_lib.h` (minimal C header), `test.cnx` (minimal trigger), `README.md` (expected vs actual output)
 Run: `cnext test.cnx` then compare generated `.c`/`.h` against expected output.
+Devs can't access `/tmp` — paste the **full** `fake_lib.h` + `test.cnx` + expected/actual/compiler output **inline in the GitHub issue body**. File on `jlaustill/c-next` via `gh issue create`.
 
 ## Screen Sizes
 
