@@ -10,6 +10,17 @@
 #include "../data/signal_data.hpp"
 
 #include <stdint.h>
+#include <stdbool.h>
+
+// ADR-044: Overflow helper functions
+#include <limits.h>
+
+static inline uint8_t cnx_clamp_add_u8(uint8_t a, uint32_t b) {
+    if (b > (uint32_t)(UINT8_MAX - a)) return UINT8_MAX;
+    uint8_t result;
+    if (__builtin_add_overflow(a, (uint8_t)b, &result)) return UINT8_MAX;
+    return result;
+}
 
 /* Scope: GaugeTemp */
 static lv_obj_t* GaugeTemp_egt_title = NULL;
@@ -22,43 +33,90 @@ static lv_obj_t* GaugeTemp_rpm_title = NULL;
 static lv_obj_t* GaugeTemp_rpm_val = NULL;
 static lv_obj_t* GaugeTemp_odo_title = NULL;
 static lv_obj_t* GaugeTemp_odo_val = NULL;
+static uint8_t GaugeTemp_flash_ctr = 0;
+
+static uint8_t GaugeTemp_warn_level(int32_t value, int32_t warn_at, int32_t crit_at) {
+    uint8_t level = 0U;
+    if (value >= warn_at) {
+        level = 1U;
+    }
+    if (value >= crit_at) {
+        level = 2U;
+    }
+    return level;
+}
 
 void GaugeTemp_update(void) {
     uint32_t now = millis();
+    GaugeTemp_flash_ctr = cnx_clamp_add_u8(GaugeTemp_flash_ctr, 1U);
+    if (GaugeTemp_flash_ctr >= 5) {
+        GaugeTemp_flash_ctr = 0U;
+    }
+    bool flash_on = false;
+    if (GaugeTemp_flash_ctr < 3) {
+        flash_on = true;
+    }
     uint32_t egt_age = now - SignalStore_current.egt_c.time;
+    uint32_t egt_color = 0xFFFFFFU;
+    uint8_t egt_box = 0U;
     if (egt_age > SIGNAL_STALE_MS) {
         lv_label_set_text(GaugeTemp_egt_val, "---- C");
     } else {
         int32_t egt = SignalStore_current.egt_c.value;
         lv_label_set_text_fmt(GaugeTemp_egt_val, "%d C", egt);
+        uint8_t egt_level = GaugeTemp_warn_level(egt, 675, 750);
+        if (egt_level == 1) {
+            egt_color = 0xFF8C00U;
+            egt_box = 255U;
+        }
+        if (egt_level == 2) {
+            egt_color = 0xFF3333U;
+            egt_box = 0U;
+            if (flash_on) {
+                egt_box = 255U;
+            }
+        }
     }
+    lv_obj_set_style_text_color(GaugeTemp_egt_val, lv_color_hex(egt_color), LV_PART_MAIN);
+    lv_obj_set_style_border_color(GaugeTemp_egt_val, lv_color_hex(egt_color), LV_PART_MAIN);
+    lv_obj_set_style_border_opa(GaugeTemp_egt_val, egt_box, LV_PART_MAIN);
     uint32_t oil_age = now - SignalStore_current.oil_temp_c.time;
+    uint32_t oil_color = 0xFFFFFFU;
+    uint8_t oil_box = 0U;
     if (oil_age > SIGNAL_STALE_MS) {
         lv_label_set_text(GaugeTemp_oil_val, "---- C");
     } else {
         int32_t oil = SignalStore_current.oil_temp_c.value;
         lv_label_set_text_fmt(GaugeTemp_oil_val, "%d C", oil);
+        uint8_t oil_level = GaugeTemp_warn_level(oil, 120, 140);
+        if (oil_level == 1) {
+            oil_color = 0xFF8C00U;
+            oil_box = 255U;
+        }
+        if (oil_level == 2) {
+            oil_color = 0xFF3333U;
+            oil_box = 0U;
+            if (flash_on) {
+                oil_box = 255U;
+            }
+        }
     }
-    uint32_t fuel_age = now - SignalStore_current.fuel_pressure_kpa.time;
-    if (fuel_age > SIGNAL_STALE_MS) {
-        lv_label_set_text(GaugeTemp_fuel_val, "---- kPa");
-    } else {
-        int32_t fuel = SignalStore_current.fuel_pressure_kpa.value;
-        lv_label_set_text_fmt(GaugeTemp_fuel_val, "%d kPa", fuel);
-    }
+    lv_obj_set_style_text_color(GaugeTemp_oil_val, lv_color_hex(oil_color), LV_PART_MAIN);
+    lv_obj_set_style_border_color(GaugeTemp_oil_val, lv_color_hex(oil_color), LV_PART_MAIN);
+    lv_obj_set_style_border_opa(GaugeTemp_oil_val, oil_box, LV_PART_MAIN);
     uint32_t rpm_age = now - SignalStore_current.rpm.time;
     if (rpm_age > SIGNAL_STALE_MS) {
-        lv_label_set_text(GaugeTemp_rpm_val, "---- RPM");
+        lv_label_set_text(GaugeTemp_rpm_val, "----");
     } else {
         int32_t rpm = SignalStore_current.rpm.value;
-        lv_label_set_text_fmt(GaugeTemp_rpm_val, "%d RPM", rpm);
+        lv_label_set_text_fmt(GaugeTemp_rpm_val, "%d", rpm);
     }
     uint32_t odo_age = now - SignalStore_current.total_dist_km.time;
     if (odo_age > SIGNAL_STALE_MS) {
-        lv_label_set_text(GaugeTemp_odo_val, "---- mi");
+        lv_label_set_text(GaugeTemp_odo_val, "----");
     } else {
         int32_t odo = SignalStore_current.total_dist_km.value * 0.621371;
-        lv_label_set_text_fmt(GaugeTemp_odo_val, "%d mi", odo);
+        lv_label_set_text_fmt(GaugeTemp_odo_val, "%d", odo);
     }
 }
 
@@ -71,53 +129,53 @@ void GaugeTemp_create(void) {
     lv_obj_set_style_bg_color(scr, lv_color_hex(0x1A1A2E), LV_PART_MAIN);
     GaugeTemp_egt_title = lv_label_create(scr);
     lv_label_set_text(GaugeTemp_egt_title, "EGT");
-    lv_obj_align(GaugeTemp_egt_title, LV_ALIGN_CENTER, 0, -142);
-    lv_obj_set_style_text_font(GaugeTemp_egt_title, &lv_font_montserrat_14, LV_PART_MAIN);
-    lv_obj_set_style_text_color(GaugeTemp_egt_title, lv_color_hex(0xFF8C00), LV_PART_MAIN);
+    lv_obj_align(GaugeTemp_egt_title, LV_ALIGN_TOP_MID, 0, 54);
+    lv_obj_set_style_text_font(GaugeTemp_egt_title, &lv_font_montserrat_32, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTemp_egt_title, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
     GaugeTemp_egt_val = lv_label_create(scr);
     lv_label_set_text(GaugeTemp_egt_val, "---- C");
-    lv_obj_align(GaugeTemp_egt_val, LV_ALIGN_CENTER, 0, -116);
-    lv_obj_set_style_text_font(GaugeTemp_egt_val, &lv_font_montserrat_32, LV_PART_MAIN);
-    lv_obj_set_style_text_color(GaugeTemp_egt_val, lv_color_hex(0xFF8C00), LV_PART_MAIN);
+    lv_obj_align(GaugeTemp_egt_val, LV_ALIGN_TOP_MID, 0, 10);
+    lv_obj_set_style_text_font(GaugeTemp_egt_val, &lv_font_montserrat_40, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTemp_egt_val, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+    lv_obj_set_style_border_width(GaugeTemp_egt_val, 3, LV_PART_MAIN);
+    lv_obj_set_style_radius(GaugeTemp_egt_val, 6, LV_PART_MAIN);
+    lv_obj_set_style_pad_left(GaugeTemp_egt_val, 6, LV_PART_MAIN);
+    lv_obj_set_style_pad_right(GaugeTemp_egt_val, 6, LV_PART_MAIN);
+    lv_obj_set_style_border_opa(GaugeTemp_egt_val, 0U, LV_PART_MAIN);
     GaugeTemp_oil_title = lv_label_create(scr);
     lv_label_set_text(GaugeTemp_oil_title, "OIL");
-    lv_obj_align(GaugeTemp_oil_title, LV_ALIGN_CENTER, 0, -78);
-    lv_obj_set_style_text_font(GaugeTemp_oil_title, &lv_font_montserrat_14, LV_PART_MAIN);
-    lv_obj_set_style_text_color(GaugeTemp_oil_title, lv_color_hex(0x4488FF), LV_PART_MAIN);
+    lv_obj_align(GaugeTemp_oil_title, LV_ALIGN_TOP_MID, 0, 133);
+    lv_obj_set_style_text_font(GaugeTemp_oil_title, &lv_font_montserrat_32, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTemp_oil_title, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
     GaugeTemp_oil_val = lv_label_create(scr);
     lv_label_set_text(GaugeTemp_oil_val, "---- C");
-    lv_obj_align(GaugeTemp_oil_val, LV_ALIGN_CENTER, 0, -52);
-    lv_obj_set_style_text_font(GaugeTemp_oil_val, &lv_font_montserrat_32, LV_PART_MAIN);
-    lv_obj_set_style_text_color(GaugeTemp_oil_val, lv_color_hex(0x4488FF), LV_PART_MAIN);
-    GaugeTemp_fuel_title = lv_label_create(scr);
-    lv_label_set_text(GaugeTemp_fuel_title, "FUEL");
-    lv_obj_align(GaugeTemp_fuel_title, LV_ALIGN_CENTER, 0, -14);
-    lv_obj_set_style_text_font(GaugeTemp_fuel_title, &lv_font_montserrat_14, LV_PART_MAIN);
-    lv_obj_set_style_text_color(GaugeTemp_fuel_title, lv_color_hex(0x44BB44), LV_PART_MAIN);
-    GaugeTemp_fuel_val = lv_label_create(scr);
-    lv_label_set_text(GaugeTemp_fuel_val, "---- kPa");
-    lv_obj_align(GaugeTemp_fuel_val, LV_ALIGN_CENTER, 0, 12);
-    lv_obj_set_style_text_font(GaugeTemp_fuel_val, &lv_font_montserrat_32, LV_PART_MAIN);
-    lv_obj_set_style_text_color(GaugeTemp_fuel_val, lv_color_hex(0x44BB44), LV_PART_MAIN);
+    lv_obj_align(GaugeTemp_oil_val, LV_ALIGN_TOP_MID, 0, 89);
+    lv_obj_set_style_text_font(GaugeTemp_oil_val, &lv_font_montserrat_40, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTemp_oil_val, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+    lv_obj_set_style_border_width(GaugeTemp_oil_val, 3, LV_PART_MAIN);
+    lv_obj_set_style_radius(GaugeTemp_oil_val, 6, LV_PART_MAIN);
+    lv_obj_set_style_pad_left(GaugeTemp_oil_val, 6, LV_PART_MAIN);
+    lv_obj_set_style_pad_right(GaugeTemp_oil_val, 6, LV_PART_MAIN);
+    lv_obj_set_style_border_opa(GaugeTemp_oil_val, 0U, LV_PART_MAIN);
     GaugeTemp_rpm_title = lv_label_create(scr);
     lv_label_set_text(GaugeTemp_rpm_title, "RPM");
-    lv_obj_align(GaugeTemp_rpm_title, LV_ALIGN_CENTER, 0, 50);
-    lv_obj_set_style_text_font(GaugeTemp_rpm_title, &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_obj_align(GaugeTemp_rpm_title, LV_ALIGN_TOP_MID, 0, 347);
+    lv_obj_set_style_text_font(GaugeTemp_rpm_title, &lv_font_montserrat_32, LV_PART_MAIN);
     lv_obj_set_style_text_color(GaugeTemp_rpm_title, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
     GaugeTemp_rpm_val = lv_label_create(scr);
-    lv_label_set_text(GaugeTemp_rpm_val, "---- RPM");
-    lv_obj_align(GaugeTemp_rpm_val, LV_ALIGN_CENTER, 0, 76);
-    lv_obj_set_style_text_font(GaugeTemp_rpm_val, &lv_font_montserrat_32, LV_PART_MAIN);
+    lv_label_set_text(GaugeTemp_rpm_val, "----");
+    lv_obj_align(GaugeTemp_rpm_val, LV_ALIGN_TOP_MID, 0, 382);
+    lv_obj_set_style_text_font(GaugeTemp_rpm_val, &lv_font_montserrat_40, LV_PART_MAIN);
     lv_obj_set_style_text_color(GaugeTemp_rpm_val, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
     GaugeTemp_odo_title = lv_label_create(scr);
-    lv_label_set_text(GaugeTemp_odo_title, "ODO");
-    lv_obj_align(GaugeTemp_odo_title, LV_ALIGN_CENTER, 0, 114);
-    lv_obj_set_style_text_font(GaugeTemp_odo_title, &lv_font_montserrat_14, LV_PART_MAIN);
+    lv_label_set_text(GaugeTemp_odo_title, "ODO (mi)");
+    lv_obj_align(GaugeTemp_odo_title, LV_ALIGN_TOP_MID, 0, 268);
+    lv_obj_set_style_text_font(GaugeTemp_odo_title, &lv_font_montserrat_32, LV_PART_MAIN);
     lv_obj_set_style_text_color(GaugeTemp_odo_title, lv_color_hex(0xAAAAAA), LV_PART_MAIN);
     GaugeTemp_odo_val = lv_label_create(scr);
-    lv_label_set_text(GaugeTemp_odo_val, "---- mi");
-    lv_obj_align(GaugeTemp_odo_val, LV_ALIGN_CENTER, 0, 140);
-    lv_obj_set_style_text_font(GaugeTemp_odo_val, &lv_font_montserrat_32, LV_PART_MAIN);
+    lv_label_set_text(GaugeTemp_odo_val, "----");
+    lv_obj_align(GaugeTemp_odo_val, LV_ALIGN_TOP_MID, 0, 303);
+    lv_obj_set_style_text_font(GaugeTemp_odo_val, &lv_font_montserrat_40, LV_PART_MAIN);
     lv_obj_set_style_text_color(GaugeTemp_odo_val, lv_color_hex(0xAAAAAA), LV_PART_MAIN);
     lv_timer_create(GaugeTemp_on_update_timer, 100, 0);
 }

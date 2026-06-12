@@ -9,6 +9,7 @@
 #include "signal_data.hpp"
 
 #include <stdint.h>
+#include <stdbool.h>
 
 /* Scope: J1939Decoder */
 
@@ -79,26 +80,100 @@ static void J1939Decoder_decode_65248(const uint8_t data[8]) {
     }
 }
 
-void J1939Decoder_decode(uint16_t pgn, const uint8_t data[8]) {
-    if (pgn == 61444) {
+static void J1939Decoder_decode_61445(const uint8_t data[8]) {
+    uint8_t lv = data[4];
+    uint8_t dm = data[0];
+    uint8_t ac = data[3];
+    bool changed = false;
+    if (lv != SignalStore_current.gear.lever) {
+        changed = true;
+    }
+    if (dm != SignalStore_current.gear.demanded) {
+        changed = true;
+    }
+    if (ac != SignalStore_current.gear.actual) {
+        changed = true;
+    }
+    SignalStore_current.gear.lever = lv;
+    SignalStore_current.gear.demanded = dm;
+    SignalStore_current.gear.actual = ac;
+    SignalStore_current.gear.time = millis();
+    if (changed) {
+        Serial.printf("GEAR: lever=%c(0x%02X) dmd=0x%02X cur=0x%02X\n", lv, lv, dm, ac);
+    }
+}
+
+static void J1939Decoder_decode_65272(const uint8_t data[8]) {
+    uint16_t raw177 = J1939Decoder_extract_u16(data, 4U, 5U);
+    int32_t raw177_wide = ((raw177) & 0xFFFFU);
+    float temp = raw177_wide * 0.03125 - 273.0;
+    int32_t prev_i = SignalStore_current.trans_temp_c.value;
+    int32_t new_i = static_cast<int32_t>(temp);
+    SignalStore_current.trans_temp_c.value = temp;
+    SignalStore_current.trans_temp_c.time = millis();
+    if (new_i != prev_i) {
+        Serial.printf("TRANS TEMP: %d C (raw=%d)\n", new_i, raw177_wide);
+    }
+}
+
+static void J1939Decoder_decode_65098(const uint8_t data[8]) {
+    uint8_t b_tow = data[2];
+    uint8_t b_svc = data[0];
+    uint8_t b_warn = data[5];
+    uint8_t tow = static_cast<uint8_t>(((b_tow >> 4) & ((1U << 2) - 1)));
+    uint8_t svc = static_cast<uint8_t>(((b_svc >> 2) & ((1U << 2) - 1)));
+    uint8_t warn = static_cast<uint8_t>(((b_warn >> 2) & ((1U << 2) - 1)));
+    bool changed = false;
+    if (tow != SignalStore_current.tow_haul.state) {
+        changed = true;
+    }
+    if (svc != SignalStore_current.trans_service.state) {
+        changed = true;
+    }
+    if (warn != SignalStore_current.trans_warning.state) {
+        changed = true;
+    }
+    uint32_t now = millis();
+    SignalStore_current.tow_haul.state = tow;
+    SignalStore_current.tow_haul.time = now;
+    SignalStore_current.trans_service.state = svc;
+    SignalStore_current.trans_service.time = now;
+    SignalStore_current.trans_warning.state = warn;
+    SignalStore_current.trans_warning.time = now;
+    if (changed) {
+        Serial.printf("ETC7: tow=%d svc=%d warn=%d (b3=0x%02X b1=0x%02X b6=0x%02X)\n", tow, svc, warn, b_tow, b_svc, b_warn);
+    }
+}
+
+void J1939Decoder_decode(uint16_t pgn, uint8_t sa, const uint8_t data[8]) {
+    if (pgn == 61444 && sa == 0) {
         J1939Decoder_decode_61444(data);
     }
-    if (pgn == 65248) {
+    if (pgn == 65248 && sa == 0) {
         J1939Decoder_decode_65248(data);
     }
-    if (pgn == 65269) {
-        J1939Decoder_decode_65269(data);
-    }
-    if (pgn == 65270) {
+    if (pgn == 65270 && sa == 1) {
         J1939Decoder_decode_65270(data);
     }
-    if (pgn == 65263) {
+    if (pgn == 65262 && sa == 1) {
+        J1939Decoder_decode_65262(data);
+    }
+    if (pgn == 65263 && sa == 1) {
         J1939Decoder_decode_65263(data);
     }
-    if (pgn == 65164) {
+    if (pgn == 65269 && sa == 1) {
+        J1939Decoder_decode_65269(data);
+    }
+    if (pgn == 65164 && sa == 1) {
         J1939Decoder_decode_65164(data);
     }
-    if (pgn == 65262) {
-        J1939Decoder_decode_65262(data);
+    if (pgn == 61445 && sa == 3) {
+        J1939Decoder_decode_61445(data);
+    }
+    if (pgn == 65272 && sa == 3) {
+        J1939Decoder_decode_65272(data);
+    }
+    if (pgn == 65098 && sa == 3) {
+        J1939Decoder_decode_65098(data);
     }
 }

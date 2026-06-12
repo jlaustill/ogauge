@@ -24,13 +24,13 @@ J1939 Decoder    OBD-II ISO-TP
         UI (LVGL)
 ```
 
-**Hard rule:** UI never blocks CAN RX or OBD polling. CAN/comms and UI run on separate threads.
+**Goal (not yet reality):** UI never blocks CAN RX. Today `main.cnx` runs `CanBus.poll()` then `LvglPort.loop()` sequentially in one thread — the LVGL update timer (all display refresh) only runs *after* `poll()` returns.
 
 ## Hard Constraints
 
 - **CAN-only** - no analog inputs, ever
 - **Single CAN interface** - one TWAI controller, one bitrate at a time
-- **Read-only** - no control actions sent via CAN
+- **Read-only** - no control actions sent via CAN. J1939 data Requests (PGN 59904) are permitted (e.g. soliciting trans oil temp / PGN 65272 from the TCM); these ask a node to broadcast data and are not control actions.
 - **Opinionated layouts** - value_count (1/2/4/6/8/12) + layout_id, no free-form editing
 - **Open signal definitions** - J1939 SPNs/PGNs and OBD-II PIDs from open repos only, no proprietary sources
 
@@ -85,18 +85,40 @@ display_st7701.cnx       — owns ST7701S panel + exposes draw_bitmap()
 touch_cst820.cnx         — owns CST820 touch + exposes read()/get_x()/get_y()
 lvgl_port.cnx            — thin LVGL glue (display/indev setup, callbacks)
 gauge_temp.cnx           — temperature gauge widget (LVGL scale + needle)
+gauge_trans.cnx          — transmission panel (gear readout, trans temp, telltale chips)
 needle_img.cnx           — needle image data + LVGL image descriptor
-data/twai_driver.cnx     — TWAI/CAN RX polling, J1939 decode, SPN extraction
+data/can_bus.cnx         — TWAI init + RX drain (poll) + J1939 Request TX
+data/j1939_decoder.cnx   — SA-gated PGN dispatch + SPN decode → SignalStore
+data/signal_data.cnx     — SignalStore (decoded values + timestamps)
 main.cnx                 — orchestrator (init sequence, loop, data→UI wiring)
 ```
 
 Each layer owns its hardware. Don't duplicate access across layers.
+
+## Gotchas (hard-won)
+
+- **No per-frame `Serial.printf` in the CAN RX drain loop** — at 250kbps it's slower than frame arrival, so `poll()`'s `while` never exits and the UI freezes at all-`----`. Log change-triggered only.
+- **LVGL + C-Next: never pass `lv_obj_t` as a function param or store handles in an array** (bugs #995/#996 — generates `const`/bad codegen). Use individual scope fields + inline the `lv_obj_*` styling, like `gauge_temp.cnx`.
+- **Serial capture: use pyserial with `setDTR(False)/setRTS(False)`**, not `stty`+`cat` (the latter glitches the ESP32 reset line → empty/garbled reads). Truck must be running for SA 3 (TCM) data.
+- **C-Next arrays: `u8[3] arr` (not `u8 arr[3]`); the subscript index must be unsigned** (`u8`/`u32`, not `i32`).
+- **J1939 PGN/SPN lookup**: `mongod` is often down — fall back to the JSON at `/home/linux/code/j1939-ref/j1939_data.json` (query with `jq`).
+- **C-Next `if (this.boolField)` fails MISRA 14.4 (E0701)** — a `this.`-qualified bool member can't be a bare `if` condition; copy to a local first (`bool on <- this.flag; if (on)`). Bare *local* bools are fine.
+- **C-Next supports `/* */` block comments** (same as C/C++) — use them to disable a multi-line block you'll re-enable later (e.g. a readout awaiting a sensor) rather than per-line `//`.
+
+## Round-display UI patterns (LVGL)
+
+- **Geometry**: visible area is a 480px circle (center 240,240, r=240). Place edge content by clock angle θ (clockwise from 12:00) via `LV_ALIGN_CENTER` offset `(R*sin θ, -R*cos θ)`. Left-edge x at row y is `240 - sqrt(240^2 - (y-240)^2)`; a straight left-aligned column can only hug as far left as its most vertically-extreme item allows.
+- **Boxing a value** (warning border): pad sides only (`pad_left/right`; leave `pad_top/bottom` 0) so the box doesn't shift the stacked layout or clip the narrow top bezel. Toggle `border_opa` 0/255 to show/hide.
+- **Blink**: a `flash_ctr` u8 ticked each 100ms `update()` (reset at 5, on for <3) gives a ~2Hz toggle shared by all blinking elements in a scope.
+- **Warning states**: `warn_level(value, warn_at, crit_at)` → 0/1/2 (pure helper; duplicated per scope since C-Next scopes don't share privates), then inline the per-level color/box styling.
+- **Preview a state without live CAN**: temporarily force the signal value in `update()` (mark `// TEMP … REVERT`), flash, revert before commit. `millis()/5000` makes an auto-looping multi-state demo.
 
 ## C-Next Bug Reports
 
 Repro directory: `/tmp/cnext-bugs/<issue-number>-<slug>/`
 Required files: `fake_lib.h` (minimal C header), `test.cnx` (minimal trigger), `README.md` (expected vs actual output)
 Run: `cnext test.cnx` then compare generated `.c`/`.h` against expected output.
+Devs can't access `/tmp` — paste the **full** `fake_lib.h` + `test.cnx` + expected/actual/compiler output **inline in the GitHub issue body**. File on `jlaustill/c-next` via `gh issue create`.
 
 ## Screen Sizes
 

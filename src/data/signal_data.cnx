@@ -5,6 +5,22 @@ struct Signal {
   u32 time;
 }
 
+// ETC2 gear state — three raw bytes from PGN 61445 (SA 3 / TCM).
+// Display renders each via GaugeTrans.gear_char/lever_char; kept raw here so
+// all character logic lives in one place (the UI), not split into the decoder.
+struct GearState {
+  u8  lever;      // Requested Range char  [4]  (ASCII)
+  u8  demanded;   // Selected Gear raw     [0]  (offset -125)
+  u8  actual;     // Current Gear raw      [3]  (offset -125)
+  u32 time;
+}
+
+// J1939 2-bit telltale state: 0=off 1=on 2=error 3=N/A
+struct Status {
+  u8  state;
+  u32 time;
+}
+
 // All known signal values in native J1939 units
 // Unit conversion (kPa→PSI, C→F) happens at display time
 struct SignalData {
@@ -16,6 +32,11 @@ struct SignalData {
   Signal fuel_pressure_kpa;
   Signal rpm;
   Signal total_dist_km;
+  GearState gear;
+  Signal trans_temp_c;
+  Status tow_haul;
+  Status trans_service;
+  Status trans_warning;
 }
 
 const u32 SIGNAL_STALE_MS <- 2000;

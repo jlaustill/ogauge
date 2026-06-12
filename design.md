@@ -27,7 +27,7 @@ Also: the project is a **reference consumer** for open, community-maintained sig
 * **CAN-only**. No analog inputs now or ever.
 * **Single CAN interface** (one TWAI controller, one transceiver).
 * **One bitrate active at a time** (user-selectable). Multi-network users should use an external gateway (e.g., OCCN).
-* **Read-only display device** (no control actions).
+* **Read-only display device** (no control actions). May send J1939 data Requests (PGN 59904) to solicit otherwise-unbroadcast PGNs (e.g. trans oil temp / PGN 65272); requests are not control actions.
 * **Opinionated layouts** (no free-form UI editing). Users configure slot configs only.
 * **No CAN termination**. 120Ω must be provided externally.
 * **Multiple Screen Sizes** it needs to support all of the available screen sizes, 1.75, 1.85, 2.1, 2.8, 4, and all future round sizes with proper scaling

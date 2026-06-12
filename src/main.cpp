@@ -9,6 +9,7 @@
 #include "display/touch_cst820.hpp"
 #include "display/lvgl_port.hpp"
 #include "display/gauge_temp.hpp"
+#include "display/gauge_trans.hpp"
 #include "data/can_bus.hpp"
 
 void setup(void) {
@@ -27,6 +28,8 @@ void setup(void) {
     LvglPort_init();
     Serial.println("Gauge init...");
     GaugeTemp_create();
+    Serial.println("Gear readout init...");
+    GaugeTrans_create();
     Serial.println("CAN init...");
     CanBus_init();
     Serial.println("Ready!");
