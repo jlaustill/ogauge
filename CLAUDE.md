@@ -102,6 +102,16 @@ Each layer owns its hardware. Don't duplicate access across layers.
 - **Serial capture: use pyserial with `setDTR(False)/setRTS(False)`**, not `stty`+`cat` (the latter glitches the ESP32 reset line → empty/garbled reads). Truck must be running for SA 3 (TCM) data.
 - **C-Next arrays: `u8[3] arr` (not `u8 arr[3]`); the subscript index must be unsigned** (`u8`/`u32`, not `i32`).
 - **J1939 PGN/SPN lookup**: `mongod` is often down — fall back to the JSON at `/home/linux/code/j1939-ref/j1939_data.json` (query with `jq`).
+- **C-Next `if (this.boolField)` fails MISRA 14.4 (E0701)** — a `this.`-qualified bool member can't be a bare `if` condition; copy to a local first (`bool on <- this.flag; if (on)`). Bare *local* bools are fine.
+- **C-Next supports `/* */` block comments** (same as C/C++) — use them to disable a multi-line block you'll re-enable later (e.g. a readout awaiting a sensor) rather than per-line `//`.
+
+## Round-display UI patterns (LVGL)
+
+- **Geometry**: visible area is a 480px circle (center 240,240, r=240). Place edge content by clock angle θ (clockwise from 12:00) via `LV_ALIGN_CENTER` offset `(R*sin θ, -R*cos θ)`. Left-edge x at row y is `240 - sqrt(240^2 - (y-240)^2)`; a straight left-aligned column can only hug as far left as its most vertically-extreme item allows.
+- **Boxing a value** (warning border): pad sides only (`pad_left/right`; leave `pad_top/bottom` 0) so the box doesn't shift the stacked layout or clip the narrow top bezel. Toggle `border_opa` 0/255 to show/hide.
+- **Blink**: a `flash_ctr` u8 ticked each 100ms `update()` (reset at 5, on for <3) gives a ~2Hz toggle shared by all blinking elements in a scope.
+- **Warning states**: `warn_level(value, warn_at, crit_at)` → 0/1/2 (pure helper; duplicated per scope since C-Next scopes don't share privates), then inline the per-level color/box styling.
+- **Preview a state without live CAN**: temporarily force the signal value in `update()` (mark `// TEMP … REVERT`), flash, revert before commit. `millis()/5000` makes an auto-looping multi-state demo.
 
 ## C-Next Bug Reports
 
