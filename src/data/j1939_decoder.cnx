@@ -47,6 +47,11 @@ scope J1939Decoder {
     i32 raw173_wide <- raw173[0, 16];
     SignalStore.current.egt_c.value <- raw173_wide * 0.03125 - 273.0;
     SignalStore.current.egt_c.time <- global.millis();
+
+    // SPN 102 - Engine Intake Manifold #1 Pressure (boost): byte 1, 1 byte, 2 kPa/bit
+    u8 raw102 <- data[1];
+    SignalStore.current.boost_kpa.value <- raw102 * 2.0;
+    SignalStore.current.boost_kpa.time <- global.millis();
   }
 
   private void decode_65263(u8[8] data) {

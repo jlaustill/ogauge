@@ -35,6 +35,7 @@ typedef struct SignalData {
     Signal egt_c;
     Signal oil_temp_c;
     Signal fuel_pressure_kpa;
+    Signal boost_kpa;
     Signal rpm;
     Signal total_dist_km;
     GearState gear;

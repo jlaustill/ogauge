@@ -44,6 +44,9 @@ static void J1939Decoder_decode_65270(const uint8_t data[8]) {
     int32_t raw173_wide = ((raw173) & 0xFFFFU);
     SignalStore_current.egt_c.value = raw173_wide * 0.03125 - 273.0;
     SignalStore_current.egt_c.time = millis();
+    uint8_t raw102 = data[1];
+    SignalStore_current.boost_kpa.value = raw102 * 2.0;
+    SignalStore_current.boost_kpa.time = millis();
 }
 
 static void J1939Decoder_decode_65263(const uint8_t data[8]) {
