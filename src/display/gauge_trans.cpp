@@ -200,12 +200,12 @@ void GaugeTrans_create(void) {
     lv_obj_set_style_border_opa(GaugeTrans_temp_val, 0U, LV_PART_MAIN);
     GaugeTrans_boost_val = lv_label_create(scr);
     lv_label_set_text(GaugeTrans_boost_val, "---- psi");
-    lv_obj_align(GaugeTrans_boost_val, LV_ALIGN_LEFT_MID, 36, -81);
+    lv_obj_align(GaugeTrans_boost_val, LV_ALIGN_LEFT_MID, 41, -126);
     lv_obj_set_style_text_font(GaugeTrans_boost_val, &lv_font_montserrat_40, LV_PART_MAIN);
     lv_obj_set_style_text_color(GaugeTrans_boost_val, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
     GaugeTrans_boost_title = lv_label_create(scr);
     lv_label_set_text(GaugeTrans_boost_title, "BOOST");
-    lv_obj_align(GaugeTrans_boost_title, LV_ALIGN_LEFT_MID, 31, -38);
+    lv_obj_align(GaugeTrans_boost_title, LV_ALIGN_LEFT_MID, 31, -83);
     lv_obj_set_style_text_font(GaugeTrans_boost_title, &lv_font_montserrat_32, LV_PART_MAIN);
     lv_obj_set_style_text_color(GaugeTrans_boost_title, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
     GaugeTrans_tow_chip = lv_label_create(scr);

@@ -190,13 +190,13 @@ scope GaugeTrans {
     // no warning box (boost is informational). Value on top, label below.
     this.boost_val <- global.lv_label_create(scr);
     global.lv_label_set_text(this.boost_val, "---- psi");
-    global.lv_obj_align(this.boost_val, LV_ALIGN_LEFT_MID, 36, -81);
+    global.lv_obj_align(this.boost_val, LV_ALIGN_LEFT_MID, 41, -126);
     global.lv_obj_set_style_text_font(this.boost_val, lv_font_montserrat_40, LV_PART_MAIN);
     global.lv_obj_set_style_text_color(this.boost_val, global.lv_color_hex(0xFFFFFF), LV_PART_MAIN);
 
     this.boost_title <- global.lv_label_create(scr);
     global.lv_label_set_text(this.boost_title, "BOOST");
-    global.lv_obj_align(this.boost_title, LV_ALIGN_LEFT_MID, 31, -38);
+    global.lv_obj_align(this.boost_title, LV_ALIGN_LEFT_MID, 31, -83);
     global.lv_obj_set_style_text_font(this.boost_title, lv_font_montserrat_32, LV_PART_MAIN);
     global.lv_obj_set_style_text_color(this.boost_title, global.lv_color_hex(0xFFFFFF), LV_PART_MAIN);
 
