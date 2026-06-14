@@ -29,6 +29,8 @@ static lv_obj_t* GaugeTrans_temp_val = NULL;
 static lv_obj_t* GaugeTrans_tow_chip = NULL;
 static lv_obj_t* GaugeTrans_svc_chip = NULL;
 static lv_obj_t* GaugeTrans_warn_chip = NULL;
+static lv_obj_t* GaugeTrans_boost_title = NULL;
+static lv_obj_t* GaugeTrans_boost_val = NULL;
 static uint8_t GaugeTrans_flash_ctr = 0;
 static bool GaugeTrans_flash_on = false;
 
@@ -122,6 +124,13 @@ void GaugeTrans_update(void) {
     lv_obj_set_style_text_color(GaugeTrans_temp_val, lv_color_hex(temp_color), LV_PART_MAIN);
     lv_obj_set_style_border_color(GaugeTrans_temp_val, lv_color_hex(temp_color), LV_PART_MAIN);
     lv_obj_set_style_border_opa(GaugeTrans_temp_val, temp_box, LV_PART_MAIN);
+    uint32_t boost_age = now - SignalStore_current.boost_kpa.time;
+    if (boost_age > SIGNAL_STALE_MS) {
+        lv_label_set_text(GaugeTrans_boost_val, "---- psi");
+    } else {
+        int32_t psi = SignalStore_current.boost_kpa.value * 0.145038;
+        lv_label_set_text_fmt(GaugeTrans_boost_val, "%d psi", psi);
+    }
     bool tow_lit = GaugeTrans_chip_lit(SignalStore_current.tow_haul.state);
     if (tow_lit) {
         lv_obj_set_style_text_color(GaugeTrans_tow_chip, lv_color_hex(0x4488FF), LV_PART_MAIN);
@@ -189,6 +198,16 @@ void GaugeTrans_create(void) {
     lv_obj_set_style_pad_left(GaugeTrans_temp_val, 6, LV_PART_MAIN);
     lv_obj_set_style_pad_right(GaugeTrans_temp_val, 6, LV_PART_MAIN);
     lv_obj_set_style_border_opa(GaugeTrans_temp_val, 0U, LV_PART_MAIN);
+    GaugeTrans_boost_val = lv_label_create(scr);
+    lv_label_set_text(GaugeTrans_boost_val, "---- psi");
+    lv_obj_align(GaugeTrans_boost_val, LV_ALIGN_LEFT_MID, 36, -81);
+    lv_obj_set_style_text_font(GaugeTrans_boost_val, &lv_font_montserrat_40, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTrans_boost_val, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+    GaugeTrans_boost_title = lv_label_create(scr);
+    lv_label_set_text(GaugeTrans_boost_title, "BOOST");
+    lv_obj_align(GaugeTrans_boost_title, LV_ALIGN_LEFT_MID, 31, -38);
+    lv_obj_set_style_text_font(GaugeTrans_boost_title, &lv_font_montserrat_32, LV_PART_MAIN);
+    lv_obj_set_style_text_color(GaugeTrans_boost_title, lv_color_hex(0xFFFFFF), LV_PART_MAIN);
     GaugeTrans_tow_chip = lv_label_create(scr);
     lv_label_set_text(GaugeTrans_tow_chip, "TOW");
     lv_obj_align(GaugeTrans_tow_chip, LV_ALIGN_LEFT_MID, 11, 0);

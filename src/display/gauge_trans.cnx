@@ -9,6 +9,8 @@ scope GaugeTrans {
   lv_obj_t tow_chip;
   lv_obj_t svc_chip;
   lv_obj_t warn_chip;
+  lv_obj_t boost_title;
+  lv_obj_t boost_val;
   private u8 flash_ctr <- 0;     // 100ms ticks, drives the error-state flash
   private bool flash_on <- false;
 
@@ -98,6 +100,15 @@ scope GaugeTrans {
     global.lv_obj_set_style_border_color(this.temp_val, global.lv_color_hex(temp_color), LV_PART_MAIN);
     global.lv_obj_set_style_border_opa(this.temp_val, temp_box, LV_PART_MAIN);
 
+    // BOOST — convert native kPa to psi for display; no warning styling.
+    u32 boost_age <- now - SignalStore.current.boost_kpa.time;
+    if (boost_age > SIGNAL_STALE_MS) {
+      global.lv_label_set_text(this.boost_val, "---- psi");
+    } else {
+      i32 psi <- SignalStore.current.boost_kpa.value * 0.145038;
+      global.lv_label_set_text_fmt(this.boost_val, "%d psi", psi);
+    }
+
     // Telltale chips (inlined per field — proven pattern; arrays/handle-params
     // hit C-Next codegen bugs).
     bool tow_lit <- this.chip_lit(SignalStore.current.tow_haul.state);
@@ -174,6 +185,20 @@ scope GaugeTrans {
     global.lv_obj_set_style_pad_left(this.temp_val, 6, LV_PART_MAIN);
     global.lv_obj_set_style_pad_right(this.temp_val, 6, LV_PART_MAIN);
     global.lv_obj_set_style_border_opa(this.temp_val, 0, LV_PART_MAIN);
+
+    // BOOST — top-left, vertical mirror of the bottom-left trans temp. White,
+    // no warning box (boost is informational). Value on top, label below.
+    this.boost_val <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.boost_val, "---- psi");
+    global.lv_obj_align(this.boost_val, LV_ALIGN_LEFT_MID, 36, -81);
+    global.lv_obj_set_style_text_font(this.boost_val, lv_font_montserrat_40, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.boost_val, global.lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+
+    this.boost_title <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.boost_title, "BOOST");
+    global.lv_obj_align(this.boost_title, LV_ALIGN_LEFT_MID, 31, -38);
+    global.lv_obj_set_style_text_font(this.boost_title, lv_font_montserrat_32, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.boost_title, global.lv_color_hex(0xFFFFFF), LV_PART_MAIN);
 
     // Telltale chips — TOW/WARN/SVC left-aligned column hugging the left edge, 5px apart (base styling
     // inlined per field; dim by default, lit each frame by update()).
