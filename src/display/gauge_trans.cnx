@@ -11,6 +11,7 @@ scope GaugeTrans {
   lv_obj_t warn_chip;
   lv_obj_t boost_title;
   lv_obj_t boost_val;
+  lv_obj_t turbo_val;
   private u8 flash_ctr <- 0;     // 100ms ticks, drives the error-state flash
   private bool flash_on <- false;
 
@@ -93,7 +94,7 @@ scope GaugeTrans {
       if (temp_level = 2) {
         temp_color <- 0xFF3333;
         temp_box <- 0;
-        if (blink) { temp_box <- 255; }
+        if (blink = true) { temp_box <- 255; }
       }
     }
     global.lv_obj_set_style_text_color(this.temp_val, global.lv_color_hex(temp_color), LV_PART_MAIN);
@@ -109,10 +110,20 @@ scope GaugeTrans {
       global.lv_label_set_text_fmt(this.boost_val, "%d psi", psi);
     }
 
+    // TURBO MCU temp (OVGT controller board, PGN 65500) — compact diagnostic
+    // readout above BOOST. Informational, no warning styling.
+    u32 turbo_age <- now - SignalStore.current.turbo_mcu_temp_c.time;
+    if (turbo_age > SIGNAL_STALE_MS) {
+      global.lv_label_set_text(this.turbo_val, "TURBO -- C");
+    } else {
+      i32 tt <- SignalStore.current.turbo_mcu_temp_c.value;
+      global.lv_label_set_text_fmt(this.turbo_val, "TURBO %d C", tt);
+    }
+
     // Telltale chips (inlined per field — proven pattern; arrays/handle-params
     // hit C-Next codegen bugs).
     bool tow_lit <- this.chip_lit(SignalStore.current.tow_haul.state);
-    if (tow_lit) {
+    if (tow_lit = true) {
       global.lv_obj_set_style_text_color(this.tow_chip, global.lv_color_hex(0x4488FF), LV_PART_MAIN);
       global.lv_obj_set_style_border_color(this.tow_chip, global.lv_color_hex(0x4488FF), LV_PART_MAIN);
       global.lv_obj_set_style_border_opa(this.tow_chip, 255, LV_PART_MAIN);
@@ -123,7 +134,7 @@ scope GaugeTrans {
     }
 
     bool svc_lit <- this.chip_lit(SignalStore.current.trans_service.state);
-    if (svc_lit) {
+    if (svc_lit = true) {
       global.lv_obj_set_style_text_color(this.svc_chip, global.lv_color_hex(0xFFAA00), LV_PART_MAIN);
       global.lv_obj_set_style_border_color(this.svc_chip, global.lv_color_hex(0xFFAA00), LV_PART_MAIN);
       global.lv_obj_set_style_border_opa(this.svc_chip, 255, LV_PART_MAIN);
@@ -134,7 +145,7 @@ scope GaugeTrans {
     }
 
     bool warn_lit <- this.chip_lit(SignalStore.current.trans_warning.state);
-    if (warn_lit) {
+    if (warn_lit = true) {
       global.lv_obj_set_style_text_color(this.warn_chip, global.lv_color_hex(0xFF3333), LV_PART_MAIN);
       global.lv_obj_set_style_border_color(this.warn_chip, global.lv_color_hex(0xFF3333), LV_PART_MAIN);
       global.lv_obj_set_style_border_opa(this.warn_chip, 255, LV_PART_MAIN);
@@ -199,6 +210,14 @@ scope GaugeTrans {
     global.lv_obj_align(this.boost_title, LV_ALIGN_LEFT_MID, 31, -83);
     global.lv_obj_set_style_text_font(this.boost_title, lv_font_montserrat_32, LV_PART_MAIN);
     global.lv_obj_set_style_text_color(this.boost_title, global.lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+
+    // TURBO MCU temp — compact single line above BOOST, indented right to clear
+    // the circle edge near the top bezel. Gray (diagnostic, not a primary gauge).
+    this.turbo_val <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.turbo_val, "TURBO -- C");
+    global.lv_obj_align(this.turbo_val, LV_ALIGN_LEFT_MID, 60, -160);
+    global.lv_obj_set_style_text_font(this.turbo_val, lv_font_montserrat_14, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.turbo_val, global.lv_color_hex(0xAAAAAA), LV_PART_MAIN);
 
     // Telltale chips — TOW/WARN/SVC left-aligned column hugging the left edge, 5px apart (base styling
     // inlined per field; dim by default, lit each frame by update()).

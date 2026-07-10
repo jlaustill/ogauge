@@ -17,9 +17,9 @@
 static uint32_t CanBus_last_req_ms = 0;
 
 void CanBus_init(void) {
-    twai_general_config_t g_config = (twai_general_config_t){ .mode = TWAI_MODE_NORMAL, .tx_io = GPIO_NUM_19, .rx_io = GPIO_NUM_20, .clkout_io = TWAI_IO_UNUSED, .bus_off_io = TWAI_IO_UNUSED, .tx_queue_len = 5, .rx_queue_len = 32, .alerts_enabled = TWAI_ALERT_NONE, .clkout_divider = 0, .intr_flags = 0 };
-    twai_timing_config_t t_config = (twai_timing_config_t){ .brp = 16, .tseg_1 = 15, .tseg_2 = 4, .sjw = 3, .triple_sampling = false };
-    twai_filter_config_t f_config = (twai_filter_config_t){ .acceptance_code = 0, .acceptance_mask = 0xFFFFFFFF, .single_filter = true };
+    twai_general_config_t g_config = { .mode = TWAI_MODE_NORMAL, .tx_io = GPIO_NUM_19, .rx_io = GPIO_NUM_20, .clkout_io = TWAI_IO_UNUSED, .bus_off_io = TWAI_IO_UNUSED, .tx_queue_len = 5, .rx_queue_len = 32, .alerts_enabled = TWAI_ALERT_NONE, .clkout_divider = 0, .intr_flags = 0 };
+    twai_timing_config_t t_config = { .brp = 16, .tseg_1 = 15, .tseg_2 = 4, .sjw = 3, .triple_sampling = false };
+    twai_filter_config_t f_config = { .acceptance_code = 0, .acceptance_mask = 0xFFFFFFFF, .single_filter = true };
     esp_err_t err = twai_driver_install(&g_config, &t_config, &f_config);
     if (err != 0) {
         Serial.println("CAN: driver install FAILED");
@@ -34,7 +34,7 @@ void CanBus_init(void) {
 }
 
 static void CanBus_send_temp_request(void) {
-    twai_message_t req = {0};
+    twai_message_t req = {};
     req.flags = 1;
     req.identifier = 0x18EA03F9;
     req.data_length_code = 8;
@@ -46,7 +46,7 @@ static void CanBus_send_temp_request(void) {
     req.data[5] = 0xFF;
     req.data[6] = 0xFF;
     req.data[7] = 0xFF;
-    esp_err_t err = twai_transmit(&req, 0);
+    esp_err_t err = twai_transmit(&req, 0U);
     if (err != 0) {
         Serial.println("CAN TX: temp request failed");
     }
@@ -59,15 +59,15 @@ void CanBus_poll(void) {
         CanBus_send_temp_request();
         CanBus_last_req_ms = now;
     }
-    twai_message_t msg = {0};
-    esp_err_t result = twai_receive(&msg, 0);
+    twai_message_t msg = {};
+    esp_err_t result = twai_receive(&msg, 0U);
     while (result == ESP_OK) {
-        J1939Message j_msg = {0};
+        J1939Message j_msg = {};
         J1939_init(j_msg);
         J1939_setCanId(j_msg, msg.identifier);
         J1939_setData(j_msg, msg.data);
         uint16_t pgn = j_msg.pgn;
         J1939Decoder_decode(pgn, j_msg.sourceAddress, msg.data);
-        result = twai_receive(&msg, 0);
+        result = twai_receive(&msg, 0U);
     }
 }

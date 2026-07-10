@@ -18,4 +18,4 @@
 extern const uint32_t SIGNAL_STALE_MS = 2000U;
 
 /* Scope: SignalStore */
-SignalData SignalStore_current = {0};
+SignalData SignalStore_current = {};

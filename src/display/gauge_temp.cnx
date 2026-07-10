@@ -9,6 +9,10 @@ scope GaugeTemp {
   lv_obj_t oil_val;
   lv_obj_t fuel_title;
   lv_obj_t fuel_val;
+  lv_obj_t throttle_title;
+  lv_obj_t throttle_val;
+  lv_obj_t load_title;
+  lv_obj_t load_val;
   lv_obj_t rpm_title;
   lv_obj_t rpm_val;
   lv_obj_t odo_title;
@@ -51,7 +55,7 @@ scope GaugeTemp {
       if (egt_level = 2) {
         egt_color <- 0xFF3333;
         egt_box <- 0;
-        if (flash_on) { egt_box <- 255; }
+        if (flash_on = true) { egt_box <- 255; }
       }
     }
     global.lv_obj_set_style_text_color(this.egt_val, global.lv_color_hex(egt_color), LV_PART_MAIN);
@@ -75,7 +79,7 @@ scope GaugeTemp {
       if (oil_level = 2) {
         oil_color <- 0xFF3333;
         oil_box <- 0;
-        if (flash_on) { oil_box <- 255; }
+        if (flash_on = true) { oil_box <- 255; }
       }
     }
     global.lv_obj_set_style_text_color(this.oil_val, global.lv_color_hex(oil_color), LV_PART_MAIN);
@@ -92,6 +96,24 @@ scope GaugeTemp {
       global.lv_label_set_text_fmt(this.fuel_val, "%d kPa", fuel);
     }
     */
+
+    // THROTTLE (SPN 91) — informational, no warning styling.
+    u32 thr_age <- now - SignalStore.current.throttle_pct.time;
+    if (thr_age > SIGNAL_STALE_MS) {
+      global.lv_label_set_text(this.throttle_val, "--%");
+    } else {
+      i32 thr <- SignalStore.current.throttle_pct.value;
+      global.lv_label_set_text_fmt(this.throttle_val, "%d%%", thr);
+    }
+
+    // ENGINE LOAD (SPN 92) — informational, no warning styling.
+    u32 load_age <- now - SignalStore.current.engine_load_pct.time;
+    if (load_age > SIGNAL_STALE_MS) {
+      global.lv_label_set_text(this.load_val, "--%");
+    } else {
+      i32 load <- SignalStore.current.engine_load_pct.value;
+      global.lv_label_set_text_fmt(this.load_val, "%d%%", load);
+    }
 
     u32 rpm_age <- now - SignalStore.current.rpm.time;
     if (rpm_age > SIGNAL_STALE_MS) {
@@ -169,29 +191,57 @@ scope GaugeTemp {
     global.lv_obj_set_style_text_color(this.fuel_val, global.lv_color_hex(0x44BB44), LV_PART_MAIN);
     */
 
-    // RPM — white, label above value; value borders the gear (D 1 1)
+    // Throttle + engine load — side by side in the center gap (widest band).
+    // Small title above value; informational (white), no warning styling.
+    this.throttle_title <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.throttle_title, "THR");
+    global.lv_obj_align(this.throttle_title, LV_ALIGN_CENTER, -100, -44);
+    global.lv_obj_set_style_text_font(this.throttle_title, lv_font_montserrat_14, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.throttle_title, global.lv_color_hex(0xAAAAAA), LV_PART_MAIN);
+
+    this.throttle_val <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.throttle_val, "--%");
+    global.lv_obj_align(this.throttle_val, LV_ALIGN_CENTER, -100, -16);
+    global.lv_obj_set_style_text_font(this.throttle_val, lv_font_montserrat_32, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.throttle_val, global.lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+
+    this.load_title <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.load_title, "LOAD");
+    global.lv_obj_align(this.load_title, LV_ALIGN_CENTER, 100, -44);
+    global.lv_obj_set_style_text_font(this.load_title, lv_font_montserrat_14, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.load_title, global.lv_color_hex(0xAAAAAA), LV_PART_MAIN);
+
+    this.load_val <- global.lv_label_create(scr);
+    global.lv_label_set_text(this.load_val, "--%");
+    global.lv_obj_align(this.load_val, LV_ALIGN_CENTER, 100, -16);
+    global.lv_obj_set_style_text_font(this.load_val, lv_font_montserrat_32, LV_PART_MAIN);
+    global.lv_obj_set_style_text_color(this.load_val, global.lv_color_hex(0xFFFFFF), LV_PART_MAIN);
+
+    // RPM — white, label above value. Swapped up from the bottom slot to sit
+    // above ODO (center column: EGT, OIL, THR/LOAD, RPM, ODO top-to-bottom).
     this.rpm_title <- global.lv_label_create(scr);
     global.lv_label_set_text(this.rpm_title, "RPM");
-    global.lv_obj_align(this.rpm_title, LV_ALIGN_TOP_MID, 0, 347);
+    global.lv_obj_align(this.rpm_title, LV_ALIGN_TOP_MID, 0, 268);
     global.lv_obj_set_style_text_font(this.rpm_title, lv_font_montserrat_32, LV_PART_MAIN);
     global.lv_obj_set_style_text_color(this.rpm_title, global.lv_color_hex(0xFFFFFF), LV_PART_MAIN);
 
     this.rpm_val <- global.lv_label_create(scr);
     global.lv_label_set_text(this.rpm_val, "----");
-    global.lv_obj_align(this.rpm_val, LV_ALIGN_TOP_MID, 0, 382);
+    global.lv_obj_align(this.rpm_val, LV_ALIGN_TOP_MID, 0, 303);
     global.lv_obj_set_style_text_font(this.rpm_val, lv_font_montserrat_40, LV_PART_MAIN);
     global.lv_obj_set_style_text_color(this.rpm_val, global.lv_color_hex(0xFFFFFF), LV_PART_MAIN);
 
-    // ODO — gray, label above value; unit moved into the label ("ODO (mi)")
+    // ODO — gray, label above value; unit in the label ("ODO (mi)"). Swapped
+    // down to the bottom slot.
     this.odo_title <- global.lv_label_create(scr);
     global.lv_label_set_text(this.odo_title, "ODO (mi)");
-    global.lv_obj_align(this.odo_title, LV_ALIGN_TOP_MID, 0, 268);
+    global.lv_obj_align(this.odo_title, LV_ALIGN_TOP_MID, 0, 347);
     global.lv_obj_set_style_text_font(this.odo_title, lv_font_montserrat_32, LV_PART_MAIN);
     global.lv_obj_set_style_text_color(this.odo_title, global.lv_color_hex(0xAAAAAA), LV_PART_MAIN);
 
     this.odo_val <- global.lv_label_create(scr);
     global.lv_label_set_text(this.odo_val, "----");
-    global.lv_obj_align(this.odo_val, LV_ALIGN_TOP_MID, 0, 303);
+    global.lv_obj_align(this.odo_val, LV_ALIGN_TOP_MID, 0, 382);
     global.lv_obj_set_style_text_font(this.odo_val, lv_font_montserrat_40, LV_PART_MAIN);
     global.lv_obj_set_style_text_color(this.odo_val, global.lv_color_hex(0xAAAAAA), LV_PART_MAIN);
 

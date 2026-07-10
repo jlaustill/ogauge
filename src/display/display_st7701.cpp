@@ -22,36 +22,36 @@ static spi_device_handle_t Display_spi_handle = {};
 static esp_lcd_panel_handle_t Display_panel_handle = {};
 
 static void Display_spi_cmd(uint8_t cmd) {
-    struct spi_transaction_t txn = (spi_transaction_t){ .cmd = 0, .addr = cmd, .length = 0, .rxlength = 0 };
+    struct spi_transaction_t txn = { .cmd = 0, .addr = cmd, .length = 0, .rxlength = 0 };
     spi_device_transmit(Display_spi_handle, &txn);
 }
 
 static void Display_spi_data(uint8_t data) {
-    struct spi_transaction_t txn = (spi_transaction_t){ .cmd = 1, .addr = data, .length = 0, .rxlength = 0 };
+    struct spi_transaction_t txn = { .cmd = 1, .addr = data, .length = 0, .rxlength = 0 };
     spi_device_transmit(Display_spi_handle, &txn);
 }
 
 static void Display_cs_enable(void) {
     TCA9554_set_pin(3, false);
-    vTaskDelay(pdMS_TO_TICKS(10));
+    vTaskDelay(pdMS_TO_TICKS(10U));
 }
 
 static void Display_cs_disable(void) {
     TCA9554_set_pin(3, true);
-    vTaskDelay(pdMS_TO_TICKS(10));
+    vTaskDelay(pdMS_TO_TICKS(10U));
 }
 
 static void Display_reset(void) {
     TCA9554_set_pin(1, false);
-    vTaskDelay(pdMS_TO_TICKS(10));
+    vTaskDelay(pdMS_TO_TICKS(10U));
     TCA9554_set_pin(1, true);
-    vTaskDelay(pdMS_TO_TICKS(50));
+    vTaskDelay(pdMS_TO_TICKS(50U));
 }
 
 static void Display_spi_init(void) {
-    spi_bus_config_t buscfg = (spi_bus_config_t){ .mosi_io_num = 1, .miso_io_num = -1, .sclk_io_num = 2, .quadwp_io_num = -1, .quadhd_io_num = -1, .max_transfer_sz = 64 };
+    spi_bus_config_t buscfg = { .mosi_io_num = 1, .miso_io_num = -1, .sclk_io_num = 2, .quadwp_io_num = -1, .quadhd_io_num = -1, .max_transfer_sz = 64 };
     spi_bus_initialize(SPI2_HOST, &buscfg, SPI_DMA_CH_AUTO);
-    spi_device_interface_config_t devcfg = (spi_device_interface_config_t){ .command_bits = 1, .address_bits = 8, .mode = 0, .clock_speed_hz = 40000000, .spics_io_num = -1, .queue_size = 1 };
+    spi_device_interface_config_t devcfg = { .command_bits = 1, .address_bits = 8, .mode = 0, .clock_speed_hz = 40000000, .spics_io_num = -1, .queue_size = 1 };
     spi_bus_add_device(SPI2_HOST, &devcfg, &Display_spi_handle);
 }
 
@@ -267,15 +267,15 @@ static void Display_st7701_init(void) {
     Display_spi_cmd(0x3AU);
     Display_spi_data(0x66U);
     Display_spi_cmd(0x11U);
-    vTaskDelay(pdMS_TO_TICKS(480));
+    vTaskDelay(pdMS_TO_TICKS(480U));
     Display_spi_cmd(0x20U);
-    vTaskDelay(pdMS_TO_TICKS(120));
+    vTaskDelay(pdMS_TO_TICKS(120U));
     Display_spi_cmd(0x29U);
     Display_cs_disable();
 }
 
 static void Display_rgb_panel_init(void) {
-    esp_lcd_rgb_panel_config_t rgb_config = (esp_lcd_rgb_panel_config_t){ .clk_src = LCD_CLK_SRC_PLL160M, .timings = (esp_lcd_rgb_timing_t){ .pclk_hz = 16000000, .h_res = 480, .v_res = 480, .hsync_pulse_width = 8, .hsync_back_porch = 10, .hsync_front_porch = 50, .vsync_pulse_width = 3, .vsync_back_porch = 8, .vsync_front_porch = 8 }, .data_width = 16, .psram_trans_align = 64, .hsync_gpio_num = 38, .vsync_gpio_num = 39, .de_gpio_num = 40, .pclk_gpio_num = 41, .data_gpio_nums = {5, 45, 48, 47, 21, 14, 13, 12, 11, 10, 9, 46, 3, 8, 18, 17}, .disp_gpio_num = -1 };
+    esp_lcd_rgb_panel_config_t rgb_config = { .clk_src = LCD_CLK_SRC_PLL160M, .timings = { .pclk_hz = 16000000, .h_res = 480, .v_res = 480, .hsync_pulse_width = 8, .hsync_back_porch = 10, .hsync_front_porch = 50, .vsync_pulse_width = 3, .vsync_back_porch = 8, .vsync_front_porch = 8 }, .data_width = 16, .psram_trans_align = 64, .hsync_gpio_num = 38, .vsync_gpio_num = 39, .de_gpio_num = 40, .pclk_gpio_num = 41, .data_gpio_nums = {5, 45, 48, 47, 21, 14, 13, 12, 11, 10, 9, 46, 3, 8, 18, 17}, .disp_gpio_num = -1 };
     rgb_config.flags.fb_in_psram = true;
     esp_lcd_new_rgb_panel(&rgb_config, &Display_panel_handle);
     esp_lcd_panel_reset(Display_panel_handle);
@@ -297,7 +297,7 @@ void Display_init(void) {
 }
 
 void Display_fill_color(uint16_t color) {
-    uint16_t buf[480] = {0};
+    uint16_t buf[480] = {};
     uint32_t i = 0U;
     while (i < 480) {
         buf[i] = color;
