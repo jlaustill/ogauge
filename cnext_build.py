@@ -1,85 +1,76 @@
 Import("env")
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# C-Next transpile hook (runs as a `post:` extra script).
+# C-Next transpile hook (runs as a `pre:` extra script).
 #
-# Since c-next v0.2.17 (Issue #985) an undeclared call to a framework function
-# (FreeRTOS vTaskDelay, ESP-IDF twai_*, Arduino ledc*) is a hard error (E0422)
-# unless cnext can see its declaration. To resolve those, cnext must preprocess
-# the framework headers with the SAME include set and target compiler the real
-# build uses.
+# The transpile MUST run at `pre:`: it GENERATES the .cpp files PlatformIO then
+# compiles. At `post:` the generated sources land after source enumeration and
+# would only be built on the next run.
 #
-# This is registered as `post:` (not `pre:`) precisely so PlatformIO's Arduino
-# builder has already populated env["CPPPATH"]/CPPDEFINES and set $CC to the
-# xtensa cross-compiler by the time this runs — yet it still executes during
-# configuration, before SCons compiles the generated .cpp. We hand cnext the
-# authoritative include list from the env (no fragile hand-derived globs) and
-# point it at the cross-compiler via CNEXT_CROSS_COMPILER.
+# cnext resolves the framework/library headers (FreeRTOS, ESP-IDF twai_*, Arduino
+# ledc*, lvgl) by reading the project's compile_commands.json — the same build-
+# system-agnostic contract clangd reads — for the exact include paths, defines,
+# and target compiler this build uses. That is the single source of truth, which
+# is why cnext.config.json no longer mirrors framework include paths and this
+# script no longer scrapes CPPPATH / CPPDEFINES or sets CNEXT_CROSS_COMPILER.
 # ---------------------------------------------------------------------------
 
-def _cnext_command():
-    argv = ["cnext", "src/main.cnx", "-D", "LV_CONF_INCLUDE_SIMPLE"]
-
-    # Preprocessor defines from the real build (matches the compiler's view).
-    # subst() resolves SCons variables like $BOARD_F_CPU to their real values.
-    for define in env.get("CPPDEFINES", []):
-        if isinstance(define, (list, tuple)):
-            name = env.subst(str(define[0]))
-            has_value = len(define) > 1 and define[1] is not None
-            value = env.subst(str(define[1])) if has_value else None
-            argv += ["-D", f"{name}={value}" if value is not None else name]
-        else:
-            argv += ["-D", env.subst(str(define))]
-
-    # Authoritative include directories, resolved to absolute paths.
-    includes = []
-    for item in env.get("CPPPATH", []):
-        directory = env.subst(item if isinstance(item, str) else str(item))
-        if directory:
-            includes.append(directory)
-
-    # The library-deps root holds the user's lv_conf.h, which lvgl.h resolves via
-    # `#include "lv_conf.h"` under LV_CONF_INCLUDE_SIMPLE. It is not always in
-    # CPPPATH, and without it lvgl falls back to probing pthread/cmsis OSAL
-    # headers that don't exist for this target — so lvgl fails to preprocess and
-    # lv_obj_t never resolves. Add it (and the lvgl root) explicitly.
-    project_dir = env.subst("$PROJECT_DIR")
-    libdeps = os.path.join(project_dir, ".pio", "libdeps", env["PIOENV"])
-    for extra in (libdeps, os.path.join(libdeps, "lvgl")):
-        if os.path.isdir(extra) and extra not in includes:
-            includes.append(extra)
-
-    for directory in includes:
-        argv += ["--include", directory]
-
-    return argv
+PIO_ENV = env["PIOENV"]
 
 
-def _cross_compiler_path():
-    """Full path to the target C compiler PlatformIO uses ($CC on PATH)."""
-    cc = env.subst("$CC")
-    return shutil.which(cc, path=env["ENV"].get("PATH", os.environ.get("PATH", ""))) or cc
+def _child_env():
+    """Env for the cnext subprocess.
+
+    Prepend the build's PATH so cnext can resolve the target cross-compiler named
+    in compile_commands.json (e.g. xtensa-esp32s3-elf-g++), which is not on the
+    default PATH. cnext reads the compiler *name* from the database itself.
+    """
+    child = dict(os.environ)
+    pio_path = env["ENV"].get("PATH")
+    if pio_path:
+        child["PATH"] = pio_path + os.pathsep + child.get("PATH", "")
+    return child
+
+
+def _ensure_compile_commands(child_env):
+    """Make sure compile_commands.json exists for cnext to read.
+
+    On a fresh checkout it may be absent; regenerate it from the committed
+    generated .cpp via a nested `compiledb` run. CNEXT_SKIP_TRANSPILE breaks the
+    recursion — this script no-ops inside that nested run.
+    """
+    if Path("compile_commands.json").exists():
+        return
+    if os.environ.get("CNEXT_SKIP_TRANSPILE"):
+        return
+    print("compile_commands.json missing — generating via `pio run -t compiledb`...")
+    gen_env = dict(child_env)
+    gen_env["CNEXT_SKIP_TRANSPILE"] = "1"
+    subprocess.run(
+        ["pio", "run", "-e", PIO_ENV, "-t", "compiledb"],
+        env=gen_env,
+        check=False,
+    )
 
 
 def transpile_cnext():
-    """Transpile from main.cnx entry point — cnext follows includes"""
-    entry = Path("src/main.cnx")
-    if not entry.exists():
+    """Transpile from the main.cnx entry point — cnext follows its includes."""
+    if os.environ.get("CNEXT_SKIP_TRANSPILE"):
+        return  # nested compiledb run — leave the committed .cpp untouched
+    if not Path("src/main.cnx").exists():
         return
 
+    child_env = _child_env()
+    _ensure_compile_commands(child_env)
+
     print("Transpiling from main.cnx...")
-
-    child_env = dict(os.environ)
-    child_env["CNEXT_CROSS_COMPILER"] = _cross_compiler_path()
-
     try:
         result = subprocess.run(
-            _cnext_command(),
+            ["cnext", "src/main.cnx"],
             check=True,
             capture_output=True,
             text=True,
@@ -87,16 +78,10 @@ def transpile_cnext():
         )
         print(result.stdout.strip())
     except subprocess.CalledProcessError as e:
-        print(f"  ✗ Transpilation failed")
+        print("  ✗ Transpilation failed")
         print(e.stdout)
         print(e.stderr)
         sys.exit(1)
 
-# Run transpilation while the env is fully configured but before compilation.
-#
-# (Bug #982 note: the old fix_array_param_const() hack that force-added `const`
-# to array params in generated .hpp files was removed. cnext now emits array-
-# param signatures consistently between .cpp and .hpp, so forcing const on only
-# the header side created a linker mismatch. If cnext later restores `const` on
-# immutable array params in BOTH, no downstream fix-up is needed.)
+
 transpile_cnext()
