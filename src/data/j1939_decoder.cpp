@@ -13,14 +13,14 @@
 
 /* Scope: J1939Decoder */
 
-static uint16_t J1939Decoder_extract_u16(const uint8_t data[8], uint8_t byte_lo, uint8_t byte_hi) {
+static uint16_t J1939Decoder_extract_u16(uint8_t data[8], uint8_t byte_lo, uint8_t byte_hi) {
     uint16_t raw = 0U;
     raw = (uint16_t)((raw & ~(0xFFU << 0)) | ((data[byte_lo] & 0xFFU) << 0));
     raw = (uint16_t)((raw & ~(0xFFU << 8)) | ((data[byte_hi] & 0xFFU) << 8));
     return raw;
 }
 
-static uint32_t J1939Decoder_extract_u32(const uint8_t data[8], uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3) {
+static uint32_t J1939Decoder_extract_u32(uint8_t data[8], uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3) {
     uint32_t raw = 0U;
     raw = (raw & ~(0xFFU << 0)) | ((data[b0] & 0xFFU) << 0);
     raw = (raw & ~(0xFFU << 8)) | ((data[b1] & 0xFFU) << 8);
@@ -29,7 +29,7 @@ static uint32_t J1939Decoder_extract_u32(const uint8_t data[8], uint8_t b0, uint
     return raw;
 }
 
-static void J1939Decoder_decode_65269(const uint8_t data[8]) {
+static void J1939Decoder_decode_65269(uint8_t data[8]) {
     uint8_t raw108 = data[0];
     SignalStore_current.barometric_pressure_kpa.value = raw108 * 0.5;
     SignalStore_current.barometric_pressure_kpa.time = millis();
@@ -39,7 +39,7 @@ static void J1939Decoder_decode_65269(const uint8_t data[8]) {
     SignalStore_current.ambient_temp_c.time = millis();
 }
 
-static void J1939Decoder_decode_65270(const uint8_t data[8]) {
+static void J1939Decoder_decode_65270(uint8_t data[8]) {
     uint16_t raw173 = J1939Decoder_extract_u16(data, 5U, 6U);
     int32_t raw173_wide = ((raw173) & 0xFFFFU);
     SignalStore_current.egt_c.value = raw173_wide * 0.03125 - 273.0;
@@ -49,33 +49,51 @@ static void J1939Decoder_decode_65270(const uint8_t data[8]) {
     SignalStore_current.boost_kpa.time = millis();
 }
 
-static void J1939Decoder_decode_65263(const uint8_t data[8]) {
+static void J1939Decoder_decode_65263(uint8_t data[8]) {
     uint8_t raw94 = data[0];
     SignalStore_current.fuel_pressure_kpa.value = raw94 * 4.0;
     SignalStore_current.fuel_pressure_kpa.time = millis();
 }
 
-static void J1939Decoder_decode_65164(const uint8_t data[8]) {
+static void J1939Decoder_decode_65164(uint8_t data[8]) {
     uint8_t raw354 = data[6];
     SignalStore_current.relative_humidity_pct.value = raw354 * 0.4;
     SignalStore_current.relative_humidity_pct.time = millis();
 }
 
-static void J1939Decoder_decode_65262(const uint8_t data[8]) {
+static void J1939Decoder_decode_65262(uint8_t data[8]) {
     uint16_t raw175 = J1939Decoder_extract_u16(data, 2U, 3U);
     int32_t raw175_wide = ((raw175) & 0xFFFFU);
     SignalStore_current.oil_temp_c.value = raw175_wide * 0.03125 - 273.0;
     SignalStore_current.oil_temp_c.time = millis();
 }
 
-static void J1939Decoder_decode_61444(const uint8_t data[8]) {
+static void J1939Decoder_decode_61444(uint8_t data[8]) {
     uint16_t raw190 = J1939Decoder_extract_u16(data, 3U, 4U);
     int32_t raw190_wide = ((raw190) & 0xFFFFU);
     SignalStore_current.rpm.value = raw190_wide * 0.125;
     SignalStore_current.rpm.time = millis();
 }
 
-static void J1939Decoder_decode_65248(const uint8_t data[8]) {
+static void J1939Decoder_decode_61443(uint8_t data[8]) {
+    uint8_t raw91 = data[2];
+    SignalStore_current.throttle_pct.value = raw91 * 0.4;
+    SignalStore_current.throttle_pct.time = millis();
+    uint8_t raw92 = data[3];
+    SignalStore_current.engine_load_pct.value = raw92 * 1.0;
+    SignalStore_current.engine_load_pct.time = millis();
+}
+
+static void J1939Decoder_decode_65500(uint8_t data[8]) {
+    uint16_t raw_temp = J1939Decoder_extract_u16(data, 0U, 1U);
+    if (raw_temp != 0xFFFF) {
+        int32_t raw_wide = ((raw_temp) & 0xFFFFU);
+        SignalStore_current.turbo_mcu_temp_c.value = raw_wide * 0.03125 - 273.0;
+        SignalStore_current.turbo_mcu_temp_c.time = millis();
+    }
+}
+
+static void J1939Decoder_decode_65248(uint8_t data[8]) {
     uint32_t raw245 = J1939Decoder_extract_u32(data, 4U, 5U, 6U, 7U);
     if (raw245 != 0xFFFFFFFF) {
         SignalStore_current.total_dist_km.value = raw245 * 0.125;
@@ -83,7 +101,7 @@ static void J1939Decoder_decode_65248(const uint8_t data[8]) {
     }
 }
 
-static void J1939Decoder_decode_61445(const uint8_t data[8]) {
+static void J1939Decoder_decode_61445(uint8_t data[8]) {
     uint8_t lv = data[4];
     uint8_t dm = data[0];
     uint8_t ac = data[3];
@@ -101,12 +119,12 @@ static void J1939Decoder_decode_61445(const uint8_t data[8]) {
     SignalStore_current.gear.demanded = dm;
     SignalStore_current.gear.actual = ac;
     SignalStore_current.gear.time = millis();
-    if (changed) {
+    if (changed == true) {
         Serial.printf("GEAR: lever=%c(0x%02X) dmd=0x%02X cur=0x%02X\n", lv, lv, dm, ac);
     }
 }
 
-static void J1939Decoder_decode_65272(const uint8_t data[8]) {
+static void J1939Decoder_decode_65272(uint8_t data[8]) {
     uint16_t raw177 = J1939Decoder_extract_u16(data, 4U, 5U);
     int32_t raw177_wide = ((raw177) & 0xFFFFU);
     float temp = raw177_wide * 0.03125 - 273.0;
@@ -119,13 +137,13 @@ static void J1939Decoder_decode_65272(const uint8_t data[8]) {
     }
 }
 
-static void J1939Decoder_decode_65098(const uint8_t data[8]) {
+static void J1939Decoder_decode_65098(uint8_t data[8]) {
     uint8_t b_tow = data[2];
     uint8_t b_svc = data[0];
     uint8_t b_warn = data[5];
-    uint8_t tow = static_cast<uint8_t>(((b_tow >> 4) & ((1U << 2) - 1)));
-    uint8_t svc = static_cast<uint8_t>(((b_svc >> 2) & ((1U << 2) - 1)));
-    uint8_t warn = static_cast<uint8_t>(((b_warn >> 2) & ((1U << 2) - 1)));
+    uint8_t tow = static_cast<uint8_t>(((b_tow >> 4) & ((1U << 2U) - 1)));
+    uint8_t svc = static_cast<uint8_t>(((b_svc >> 2) & ((1U << 2U) - 1)));
+    uint8_t warn = static_cast<uint8_t>(((b_warn >> 2) & ((1U << 2U) - 1)));
     bool changed = false;
     if (tow != SignalStore_current.tow_haul.state) {
         changed = true;
@@ -143,14 +161,17 @@ static void J1939Decoder_decode_65098(const uint8_t data[8]) {
     SignalStore_current.trans_service.time = now;
     SignalStore_current.trans_warning.state = warn;
     SignalStore_current.trans_warning.time = now;
-    if (changed) {
+    if (changed == true) {
         Serial.printf("ETC7: tow=%d svc=%d warn=%d (b3=0x%02X b1=0x%02X b6=0x%02X)\n", tow, svc, warn, b_tow, b_svc, b_warn);
     }
 }
 
-void J1939Decoder_decode(uint16_t pgn, uint8_t sa, const uint8_t data[8]) {
+void J1939Decoder_decode(uint16_t pgn, uint8_t sa, uint8_t data[8]) {
     if (pgn == 61444 && sa == 0) {
         J1939Decoder_decode_61444(data);
+    }
+    if (pgn == 61443 && sa == 0) {
+        J1939Decoder_decode_61443(data);
     }
     if (pgn == 65248 && sa == 0) {
         J1939Decoder_decode_65248(data);
@@ -178,5 +199,8 @@ void J1939Decoder_decode(uint16_t pgn, uint8_t sa, const uint8_t data[8]) {
     }
     if (pgn == 65098 && sa == 3) {
         J1939Decoder_decode_65098(data);
+    }
+    if (pgn == 65500 && sa == 1) {
+        J1939Decoder_decode_65500(data);
     }
 }

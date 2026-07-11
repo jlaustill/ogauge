@@ -102,7 +102,7 @@ Each layer owns its hardware. Don't duplicate access across layers.
 - **Serial capture: use pyserial with `setDTR(False)/setRTS(False)`**, not `stty`+`cat` (the latter glitches the ESP32 reset line → empty/garbled reads). Truck must be running for SA 3 (TCM) data.
 - **C-Next arrays: `u8[3] arr` (not `u8 arr[3]`); the subscript index must be unsigned** (`u8`/`u32`, not `i32`).
 - **J1939 PGN/SPN lookup**: `mongod` is often down — fall back to the JSON at `/home/linux/code/j1939-ref/j1939_data.json` (query with `jq`).
-- **C-Next `if (this.boolField)` fails MISRA 14.4 (E0701)** — a `this.`-qualified bool member can't be a bare `if` condition; copy to a local first (`bool on <- this.flag; if (on)`). Bare *local* bools are fine.
+- **C-Next: never a lone bool in a condition** — an `if`/`while`/ternary condition must be a comparison or logical op, never a bare bool (local *or* member). Write `if (flag = true)`, not `if (flag)` (`!flag` and `a && b` are fine — they're operations). The transpiler is *inconsistent*: it rejects `if (this.memberBool)` with E0701 but wrongly **accepts** a bare local `if (flag)` and emits it verbatim — that hole is not permission. `if (flash_on)` was never valid; fix the code (`= true`), never c-next.
 - **C-Next supports `/* */` block comments** (same as C/C++) — use them to disable a multi-line block you'll re-enable later (e.g. a readout awaiting a sensor) rather than per-line `//`.
 
 ## Round-display UI patterns (LVGL)

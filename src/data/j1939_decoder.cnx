@@ -6,9 +6,13 @@ scope J1939Decoder {
   // Source addresses — which module owns which signals on this bus.
   // The TCM (SA_TCM) re-broadcasts overlapping PGNs (oil temp, RPM, ...);
   // gating each PGN to its expected SA stops it from clobbering real data.
-  const u8 SA_ECM <- 0;     // Engine ECM: RPM, odometer
+  const u8 SA_ECM <- 0;     // Engine ECM: RPM, odometer, throttle, load
   const u8 SA_SENSOR <- 1;  // OSSM sensor module: EGT, oil, fuel, ambient, humidity
   const u8 SA_TCM <- 3;     // Transmission control module (not yet decoded)
+  // OVGT turbo controller — shares SA 1 with the OSSM sensor module (a real
+  // J1939 address collision). Unambiguous here only because OVGT alone emits
+  // PGN 65500; we gate by PGN + SA together.
+  const u8 SA_TURBO <- 1;
 
   private u16 extract_u16(u8[8] data, u8 byte_lo, u8 byte_hi) {
     u16 raw <- 0;
@@ -84,6 +88,30 @@ scope J1939Decoder {
     SignalStore.current.rpm.time <- global.millis();
   }
 
+  private void decode_61443(u8[8] data) {
+    // PGN 61443 EEC2:
+    // SPN 91 - Accelerator Pedal Position 1: byte 2, 0.4 %/bit (throttle)
+    u8 raw91 <- data[2];
+    SignalStore.current.throttle_pct.value <- raw91 * 0.4;
+    SignalStore.current.throttle_pct.time <- global.millis();
+    // SPN 92 - Engine Percent Load At Current Speed: byte 3, 1 %/bit
+    u8 raw92 <- data[3];
+    SignalStore.current.engine_load_pct.value <- raw92 * 1.0;
+    SignalStore.current.engine_load_pct.time <- global.millis();
+  }
+
+  private void decode_65500(u8[8] data) {
+    // PGN 65500 (0xFFDC) OVGT MCU-health frame, bytes 0-1: MCU die temp,
+    // u16 little-endian, 0.03125 C/bit, -273 offset (std J1939 temp math).
+    // 0xFFFF = not available -> skip so the readout goes stale (shows ----).
+    u16 raw_temp <- this.extract_u16(data, 0, 1);
+    if (raw_temp != 0xFFFF) {
+      i32 raw_wide <- raw_temp[0, 16];
+      SignalStore.current.turbo_mcu_temp_c.value <- raw_wide * 0.03125 - 273.0;
+      SignalStore.current.turbo_mcu_temp_c.time <- global.millis();
+    }
+  }
+
   private void decode_65248(u8[8] data) {
     // SPN 245 - Total Vehicle Distance: bytes 4-7, 4 bytes, 0.125 km/bit
     // 0xFFFFFFFF means not available in J1939 — skip update
@@ -111,7 +139,7 @@ scope J1939Decoder {
     SignalStore.current.gear.time     <- global.millis();
     // Change-triggered only — a per-frame printf in the RX drain loop starves
     // the UI (see ui-starvation lesson). This prints once per lever/gear change.
-    if (changed) {
+    if (changed = true) {
       global.Serial.printf("GEAR: lever=%c(0x%02X) dmd=0x%02X cur=0x%02X\n", lv, lv, dm, ac);
     }
   }
@@ -153,7 +181,7 @@ scope J1939Decoder {
     SignalStore.current.trans_service.time <- now;
     SignalStore.current.trans_warning.state <- warn;
     SignalStore.current.trans_warning.time <- now;
-    if (changed) {
+    if (changed = true) {
       global.Serial.printf("ETC7: tow=%d svc=%d warn=%d (b3=0x%02X b1=0x%02X b6=0x%02X)\n",
           tow, svc, warn, b_tow, b_svc, b_warn);
     }
@@ -164,6 +192,7 @@ scope J1939Decoder {
     // can't clobber engine/sensor data with its overlapping re-broadcasts.
     // SA_ECM (0) — engine ECM
     if (pgn = 61444 && sa = SA_ECM) { this.decode_61444(data); }
+    if (pgn = 61443 && sa = SA_ECM) { this.decode_61443(data); }
     if (pgn = 65248 && sa = SA_ECM) { this.decode_65248(data); }
     // SA_SENSOR (1) — OSSM sensor module
     if (pgn = 65270 && sa = SA_SENSOR) { this.decode_65270(data); }
@@ -175,5 +204,7 @@ scope J1939Decoder {
     if (pgn = 61445 && sa = SA_TCM) { this.decode_61445(data); }
     if (pgn = 65272 && sa = SA_TCM) { this.decode_65272(data); }
     if (pgn = 65098 && sa = SA_TCM) { this.decode_65098(data); }
+    // SA_TURBO (1) — OVGT turbo controller MCU health
+    if (pgn = 65500 && sa = SA_TURBO) { this.decode_65500(data); }
   }
 }

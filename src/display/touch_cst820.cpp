@@ -42,9 +42,9 @@ bool Touch_read(void) {
     uint8_t y_hi = Wire.read();
     uint8_t y_lo = Wire.read();
     Touch_x = (uint16_t)((Touch_x & ~(0xFFU << 0)) | ((x_lo & 0xFFU) << 0));
-    Touch_x = (uint16_t)((Touch_x & ~(0xFFU << 8)) | ((((x_hi) & ((1U << 4) - 1)) & 0xFFU) << 8));
+    Touch_x = (uint16_t)((Touch_x & ~(0xFFU << 8)) | ((((x_hi) & ((1U << 4U) - 1)) & 0xFFU) << 8));
     Touch_y = (uint16_t)((Touch_y & ~(0xFFU << 0)) | ((y_lo & 0xFFU) << 0));
-    Touch_y = (uint16_t)((Touch_y & ~(0xFFU << 8)) | ((((y_hi) & ((1U << 4) - 1)) & 0xFFU) << 8));
+    Touch_y = (uint16_t)((Touch_y & ~(0xFFU << 8)) | ((((y_hi) & ((1U << 4U) - 1)) & 0xFFU) << 8));
     return (Touch_points > 0);
 }
 

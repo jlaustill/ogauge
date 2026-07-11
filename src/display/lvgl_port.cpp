@@ -15,8 +15,8 @@
 #include <stdbool.h>
 
 /* Scope: LvglPort */
-static uint8_t LvglPort_buf1[46080] = {0};
-static uint8_t LvglPort_buf2[46080] = {0};
+static uint8_t LvglPort_buf1[46080] = {};
+static uint8_t LvglPort_buf2[46080] = {};
 static uint32_t LvglPort_last_tick = 0;
 static esp_lcd_panel_handle_t LvglPort_panel = {};
 
